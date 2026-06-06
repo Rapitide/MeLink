@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "twitter-112c1"
+  },
+  "targets": {
+    "twitter-112c1": {
+      "hosting": {
+        "main-site": [
+          "sunavi-app"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
