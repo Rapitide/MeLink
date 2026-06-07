@@ -1350,12 +1350,12 @@ export default function MainApp() {
 
           <div className="flex items-center justify-between mb-3 relative z-10">
             <span className={`text-sm font-black tracking-widest flex items-center ${isDark ? 'text-orange-400' : 'text-[#ea580c]'}`}>
-              今週(5/18-22)の100円朝食メニュー
+              今週(6/08-12)の100円朝食メニュー
             </span>
           </div>
 
           <div className={`relative z-10 w-full rounded-2xl overflow-hidden border shadow-sm mb-4 ${isDark ? 'border-gray-700' : 'border-[#e5e7eb]'}`}>
-            <img src="/20260518-22.jpg" alt="今週の100円朝食メニュー" className="w-full h-auto object-cover" />
+            <img src="/20260608-12.jpg" alt="今週の100円朝食メニュー" className="w-full h-auto object-cover" />
           </div>
 
           <div className="flex space-x-3 relative z-10">
