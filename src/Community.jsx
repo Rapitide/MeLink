@@ -2,6 +2,29 @@ import React, { useState } from 'react';
 import { doc, setDoc, updateDoc, deleteDoc, collection, addDoc, deleteField } from 'firebase/firestore';
 import { Heart, MessageCircle, Bookmark, Pin, Trash2, CheckCircle, BadgeCheck, BarChart2, Loader2, Plus, ArrowLeft } from 'lucide-react';
 
+const renderTextWithLinks = (text) => {
+  if (!text) return null;
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, index) => {
+    if (part.match(urlRegex)) {
+      return (
+        <a 
+          key={index} 
+          href={part} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="text-blue-500 hover:underline break-all font-medium"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+};
+
 export const PostItem = ({
   p, firestore, currentRoomId, currentAccountId, currentUserProfile,
   isAdmin, following, userBookmarks, expandedPostId, setExpandedPostId,
@@ -84,7 +107,7 @@ export const PostItem = ({
                 {(p.authorId === currentAccountId || isAdmin) && <button onClick={e => handleDelete(p.id, e)} className={`p-1.5 rounded-full ${isDark ? 'hover:bg-red-900/30 text-gray-500 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'} transition-colors ml-1`}><Trash2 size={16} /></button>}
               </div>
             </div>
-            <p className={`mt-1 whitespace-pre-wrap break-words text-[15px] leading-normal ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{p.content}</p>
+            <p className={`mt-1 whitespace-pre-wrap break-words text-[15px] leading-normal ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{renderTextWithLinks(p.content)}</p>
 
             {p.poll && (
               <div className={`mt-3 border rounded-xl p-4 bg-transparent ${isDark ? 'border-gray-800' : 'border-gray-200'}`} onClick={e => e.stopPropagation()}>
@@ -127,7 +150,7 @@ export const PostItem = ({
                           {r.authorId !== currentAccountId && <button onClick={(e) => toggleFollow(r.authorId, e)} className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors whitespace-nowrap flex-shrink-0 ${following[r.authorId] ? (isDark ? 'border-gray-600 text-white hover:border-red-500/50 hover:text-red-400 hover:bg-red-900/30 bg-transparent' : 'border-gray-300 text-gray-700 hover:border-red-500/50 hover:text-red-500 hover:bg-red-50 bg-transparent') : (isDark ? 'bg-white text-black border-white hover:bg-gray-200' : 'bg-gray-900 text-white border-gray-900 hover:bg-gray-800')}`}>{following[r.authorId] ? 'フォロー中' : 'フォロー'}</button>}
                           {(r.authorId === currentAccountId || isAdmin) && <button onClick={async (e) => { e.stopPropagation(); if (window.confirm("この返信を削除しますか？")) { await updateDoc(doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${p.id}`), { [`replies.${replyId}`]: deleteField() }); } }} className={`ml-auto p-1 rounded-full flex-shrink-0 transition-colors ${isDark ? 'text-gray-500 hover:text-red-400 hover:bg-red-900/30' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}><Trash2 size={14} /></button>}
                         </div>
-                        <p className={`text-sm break-words whitespace-pre-wrap mt-0.5 ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{r.content}</p>
+                        <p className={`text-sm break-words whitespace-pre-wrap mt-0.5 ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{renderTextWithLinks(r.content)}</p>
                       </div>
                     </div>
                   );
