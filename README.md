@@ -21,6 +21,22 @@
 * **セキュアなデータ通信・保管**: 
   すべてのデータ通信は SSL/TLS (HTTPS) により暗号化され、データは Google Cloud (Firebase) のインフラ上に安全に保管されます。
 
+### 🔒 実際のセキュリティルール（Firestore Rules）
+
+本アプリでは、以下のセキュリティポリシーを Firebase Cloud Firestore に適用し、アクセスを厳しく制限しています。これにより、自身のログイン認証情報と一致しないアカウントからのデータ読み書き要求は、サーバー側ですべて遮断されます。
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 各ユーザーのデータ（予定・個人データ）はその本人しかアクセスできません
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+```
+
 ---
 
 ## 🛠️ 技術スタック
