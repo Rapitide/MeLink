@@ -291,17 +291,30 @@ export default function ToDoCalendarComponent({ isDark, timetableData, onLessonS
     setActiveTimePicker(null);
   };
 
-  const handleGridClick = (e, dateObj) => {
+  const handleGridClick = (e, dateObj, clickedHour) => {
     if (e.target !== e.currentTarget) return;
 
-    // クリック位置から最も近い30分単位の開始時間を計算する
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickY = e.clientY - rect.top;
-    const clickMinTotal = Math.floor(clickY);
+    let startHour = 9;
+    let startMin = 0;
 
-    const nearest30Min = Math.round(clickMinTotal / 30) * 30;
-    const startHour = Math.floor(nearest30Min / 60);
-    const startMin = nearest30Min % 60;
+    if (clickedHour !== undefined) {
+      // モバイル版のように、特定の時間セル（clickedHour）が指定されている場合
+      const rect = e.currentTarget.getBoundingClientRect();
+      const clickY = e.clientY - rect.top; // 0 ~ 60
+      // 30分単位でスナップ
+      const startMinCalculated = clickY >= 30 ? 30 : 0;
+      startHour = clickedHour;
+      startMin = startMinCalculated;
+    } else {
+      // デスクトップ版のように、24時間全体コンテナの場合
+      const rect = e.currentTarget.getBoundingClientRect();
+      const clickY = e.clientY - rect.top;
+      const clickMinTotal = Math.floor(clickY);
+
+      const nearest30Min = Math.round(clickMinTotal / 30) * 30;
+      startHour = Math.floor(nearest30Min / 60);
+      startMin = nearest30Min % 60;
+    }
 
     let endHour = startHour + 1;
     let endMin = startMin;

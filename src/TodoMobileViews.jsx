@@ -700,7 +700,7 @@ export const MobileDayView = ({
                 </span>
                 <div 
                   className="flex-1 h-full cursor-pointer hover:bg-gray-500/5 transition-colors"
-                  onClick={(e) => handleGridClick(e, currentDate)}
+                  onClick={(e) => handleGridClick(e, currentDate, h)}
                 />
               </div>
             ))}
