@@ -1862,7 +1862,23 @@ export default function MainApp() {
                   <h2 className="px-4 text-base font-extrabold text-gray-400 tracking-widest">最新ニュース</h2>
                   <div className="flex-grow h-px bg-gray-800"></div>
                 </div>
-                <div className="bg-gray-900 rounded-3xl overflow-hidden shadow-xl border border-gray-800">
+                <div 
+                  onClick={() => {
+                    const shareText = "【埼大生必見】時間割・学内マップ・掲示板・バス時刻表がこれ一つに！個人情報の登録不要で今すぐ使える、埼大生のための神アプリ「MeLink」が便利すぎる🎓✨\n#埼玉大学 #埼大 #MeLink\n";
+                    const shareUrl = "https://melink.info/";
+                    if (navigator.share) {
+                      navigator.share({
+                        title: 'MeLink - 埼大生のアプリ',
+                        text: shareText,
+                        url: shareUrl,
+                      }).catch(console.error);
+                    } else {
+                      navigator.clipboard.writeText(shareText + shareUrl);
+                      showToast("リンクをコピーしました！");
+                    }
+                  }}
+                  className="bg-gray-900 rounded-3xl overflow-hidden shadow-xl border border-gray-800 cursor-pointer hover:brightness-105 hover:scale-[1.002] active:scale-[0.998] transition-all duration-200"
+                >
                   <div className="h-40 bg-gradient-to-br from-pink-600 to-rose-900 relative flex items-center justify-center overflow-hidden">
                     <div className="absolute inset-0 bg-black/20"></div>
                     <div className="absolute -right-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
@@ -1900,24 +1916,9 @@ export default function MainApp() {
                           本名・メアド等、個人情報の登録は一切不要。
                         </p>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (navigator.share) {
-                            navigator.share({
-                              title: 'MeLink - 埼大生のアプリ',
-                              text: '埼大生のための最強アプリ「MeLink」を使ってみよう！',
-                              url: window.location.href,
-                            }).catch(console.error);
-                          } else {
-                            navigator.clipboard.writeText("埼大生専用アプリ「MeLink」を使ってみよう！\n" + window.location.href);
-                            showToast("リンクをコピーしました！");
-                          }
-                        }}
-                        className="bg-pink-600 hover:bg-pink-700 text-white keep-white p-3 rounded-full transition-colors shadow-md active:scale-95 flex-shrink-0"
-                      >
+                      <div className="bg-pink-600 text-white keep-white p-3 rounded-full flex-shrink-0 shadow-md">
                         <ExternalLink size={18} />
-                      </button>
+                      </div>
                     </div>
                   </div>
                 </div>
