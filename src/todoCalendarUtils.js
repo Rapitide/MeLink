@@ -289,7 +289,27 @@ export const getEventsForDate = (dateStr, dateObj, timetableData, customEvents, 
     const d = dateObj.getDate();
     const fullDateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     
-    matchedCustomEvents = (customEvents || []).filter(ev => ev.fullDate === fullDateStr && !ev.isAllDay);
+    matchedCustomEvents = (customEvents || [])
+      .filter(ev => ev.fullDate === fullDateStr && !ev.isAllDay)
+      .map(ev => {
+        const formatTime = (h, min) => {
+          return `${h}:${String(min).padStart(2, '0')}`;
+        };
+        const endTotal = ev.startHour * 60 + ev.startMin + ev.duration;
+        const endHour = Math.floor(endTotal / 60);
+        const endMin = endTotal % 60;
+        const timeStr = `${formatTime(ev.startHour, ev.startMin)} - ${formatTime(endHour, endMin)}`;
+
+        return {
+          ...ev,
+          time: timeStr,
+          color: ev.color || (() => {
+            const cat = scheduleCategories.find(c => c.id === ev.type);
+            return cat ? cat.color : 'blue';
+          })(),
+          isCustom: true
+        };
+      });
 
     // モーダル表示中のリアルタイム同期仮プレビューをマージ (終日予定ではない場合のみ時間枠カレンダーへプロット)
     if (addModalState.isOpen && addModalState.isPreviewActive && addModalState.dateObj && !addModalState.isAllDay) {

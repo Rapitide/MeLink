@@ -3,7 +3,7 @@ import { Sun, Cloud, CloudRain, CloudSnow, CloudLightning, Music, Book, Gamepad2
 
 // --- 定数定義 ---
 export const VERIFIED_USERS = ['管理者', 'admin'];
-export const VETERAN_USERS = ['rapitide', 'bird7tarou', 'esther', 'ururu', 'yukia060307', 'milksour', 'merin', 'cocos', 'tanakan', 'wolfjp'];
+export const VETERAN_USERS = ['rptied', 'bird7tarou', 'esther', 'ururu', 'yukia060307', 'milksour', 'merin', 'cocos', 'tanakan', 'wolfjp'];
 export const NAMING_USERS = ['merinmania'];
 
 export const LESSON_COLORS = [
@@ -98,10 +98,10 @@ export const parseCSV = (csvText) => {
 };
 
 export const Avatar = ({ color, name, src, size = 'md' }) => {
-  const s = { sm: 'w-8 h-8 text-sm', md: 'w-10 h-10 text-base', lg: 'w-24 h-24 text-3xl', xl: 'w-32 h-32 text-4xl' }[size];
-  if (src) return <img src={src} alt="avatar" className={`${s} rounded-xl object-cover flex-shrink-0 bg-gray-900 shadow-sm`} />;
+  const s = { xs: 'w-5 h-5 text-[10px]', sm: 'w-8 h-8 text-sm', md: 'w-10 h-10 text-base', lg: 'w-24 h-24 text-3xl', xl: 'w-32 h-32 text-4xl' }[size];
+  if (src) return <img src={src} alt="avatar" className={`${s} rounded-lg object-cover flex-shrink-0 bg-gray-900 shadow-sm`} />;
   const initial = (typeof name === 'string' && name.length > 0) ? name.charAt(0) : '?';
-  return <div className={`${s} rounded-xl ${color || 'bg-blue-500'} flex items-center justify-center text-white keep-white font-bold flex-shrink-0 shadow-sm`}>{initial}</div>;
+  return <div className={`${s} rounded-lg ${color || 'bg-blue-500'} flex items-center justify-center text-white keep-white font-bold flex-shrink-0 shadow-sm`}>{initial}</div>;
 };
 
 export const SPOTS = [

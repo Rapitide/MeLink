@@ -292,8 +292,6 @@ export default function ToDoCalendarComponent({ isDark, timetableData, onLessonS
   };
 
   const handleGridClick = (e, dateObj, clickedHour) => {
-    if (e.target !== e.currentTarget) return;
-
     let startHour = 9;
     let startMin = 0;
 
@@ -311,9 +309,9 @@ export default function ToDoCalendarComponent({ isDark, timetableData, onLessonS
       const clickY = e.clientY - rect.top;
       const clickMinTotal = Math.floor(clickY);
 
-      const nearest30Min = Math.round(clickMinTotal / 30) * 30;
-      startHour = Math.floor(nearest30Min / 60);
-      startMin = nearest30Min % 60;
+      const floor30Min = Math.floor(clickMinTotal / 30) * 30;
+      startHour = Math.floor(floor30Min / 60);
+      startMin = floor30Min % 60;
     }
 
     let endHour = startHour + 1;
@@ -349,6 +347,96 @@ export default function ToDoCalendarComponent({ isDark, timetableData, onLessonS
     });
     setActiveRightSidebar(true);
   };
+
+  const handleTempPreviewDragStart = (e, event) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startY = e.clientY;
+    const startHour = addModalState.startHour;
+    const startMin = addModalState.startMin;
+    const startTotal = startHour * 60 + startMin;
+    const duration = addModalState.endHour * 60 + addModalState.endMin - startTotal;
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaY = moveEvent.clientY - startY;
+      const deltaMin = Math.round(deltaY);
+      const snappedDelta = Math.round(deltaMin / 5) * 5;
+      
+      let newStartTotal = startTotal + snappedDelta;
+      if (newStartTotal < 0) newStartTotal = 0;
+      if (newStartTotal + duration > 1440) newStartTotal = 1440 - duration;
+
+      const newStartHour = Math.floor(newStartTotal / 60);
+      const newStartMin = newStartTotal % 60;
+      const newEndTotal = newStartTotal + duration;
+      const newEndHour = Math.floor(newEndTotal / 60);
+      const newEndMin = newEndTotal % 60;
+
+      setAddModalState(prev => ({
+        ...prev,
+        startHour: newStartHour,
+        startMin: newStartMin,
+        endHour: newEndHour,
+        endMin: newEndMin
+      }));
+    };
+
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleTempPreviewTouchStart = (e, event) => {
+    if (e.touches.length !== 1) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startY = e.touches[0].clientY;
+    const startHour = addModalState.startHour;
+    const startMin = addModalState.startMin;
+    const startTotal = startHour * 60 + startMin;
+    const duration = addModalState.endHour * 60 + addModalState.endMin - startTotal;
+
+    const handleTouchMove = (moveEvent) => {
+      if (moveEvent.touches.length !== 1) return;
+      const deltaY = moveEvent.touches[0].clientY - startY;
+      const deltaMin = Math.round(deltaY);
+      const snappedDelta = Math.round(deltaMin / 5) * 5;
+      
+      let newStartTotal = startTotal + snappedDelta;
+      if (newStartTotal < 0) newStartTotal = 0;
+      if (newStartTotal + duration > 1440) newStartTotal = 1440 - duration;
+
+      const newStartHour = Math.floor(newStartTotal / 60);
+      const newStartMin = newStartTotal % 60;
+      const newEndTotal = newStartTotal + duration;
+      const newEndHour = Math.floor(newEndTotal / 60);
+      const newEndMin = newEndTotal % 60;
+
+      setAddModalState(prev => ({
+        ...prev,
+        startHour: newStartHour,
+        startMin: newStartMin,
+        endHour: newEndHour,
+        endMin: newEndMin
+      }));
+    };
+
+    const handleTouchEnd = () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', handleTouchEnd);
+  };
+
 
   const handleSaveEvent = () => {
     const title = addModalState.title.trim() || '無題の予定';
@@ -1133,6 +1221,8 @@ export default function ToDoCalendarComponent({ isDark, timetableData, onLessonS
           onTouchEnd={onTouchEnd}
           handleGridClick={handleGridClick}
           handleEventClick={handleEventClick}
+          handleTempPreviewDragStart={handleTempPreviewDragStart}
+          handleTempPreviewTouchStart={handleTempPreviewTouchStart}
         />
 
         {/* 右サイドバー (モバイル用ボトムシート) */}
@@ -1341,6 +1431,8 @@ export default function ToDoCalendarComponent({ isDark, timetableData, onLessonS
               currentAccountId={currentAccountId}
               deleteDoc={deleteDoc}
               doc={doc}
+              handleTempPreviewDragStart={handleTempPreviewDragStart}
+              handleTempPreviewTouchStart={handleTempPreviewTouchStart}
             />
           )}
 
@@ -1372,6 +1464,8 @@ export default function ToDoCalendarComponent({ isDark, timetableData, onLessonS
               currentAccountId={currentAccountId}
               deleteDoc={deleteDoc}
               doc={doc}
+              handleTempPreviewDragStart={handleTempPreviewDragStart}
+              handleTempPreviewTouchStart={handleTempPreviewTouchStart}
             />
           )}
 
@@ -1403,10 +1497,10 @@ export default function ToDoCalendarComponent({ isDark, timetableData, onLessonS
           fixed xl:relative z-40 xl:z-0
           top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-md h-auto max-h-[80vh] border rounded-[28px] shadow-2xl p-6 flex flex-col overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]
           ${activeRightSidebar 
-            ? 'opacity-100 scale-100 pointer-events-auto' 
-            : 'opacity-0 scale-95 pointer-events-none'
+            ? 'opacity-100 scale-100 pointer-events-auto xl:opacity-100 xl:scale-100 xl:pointer-events-auto' 
+            : 'opacity-0 scale-95 pointer-events-none xl:opacity-100 xl:scale-100 xl:pointer-events-auto'
           }
-          xl:top-0 xl:bottom-0 xl:left-auto xl:right-0 xl:h-full xl:w-64 xl:border-l xl:border-t-0 xl:rounded-none xl:shadow-none xl:translate-y-0 xl:translate-x-0 xl:opacity-100 xl:scale-100 xl:pointer-events-auto xl:p-6
+          xl:top-0 xl:bottom-0 xl:left-auto xl:right-0 xl:h-full xl:w-64 xl:border-l xl:border-t-0 xl:rounded-none xl:shadow-none xl:translate-y-0 xl:translate-x-0 xl:p-6
           ${isDark ? 'bg-black/95 backdrop-blur-xl border-gray-800' : 'bg-white/95 backdrop-blur-xl border-gray-200'}
         `}>
           <div className="xl:hidden flex justify-between items-center mb-4 shrink-0">

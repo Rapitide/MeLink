@@ -677,101 +677,62 @@ export const EventForm = ({
                         }));
                       }
                     }}
+                    style={{ colorScheme: isDark ? 'dark' : 'light' }}
                     className={`px-2 py-1 rounded font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 text-[11px] cursor-pointer transition-all ${
                       isDark 
-                        ? 'bg-gray-850 text-white border border-gray-700 hover:bg-gray-800' 
-                        : 'bg-gray-100 text-gray-850 border border-gray-200 hover:bg-gray-200/80'
+                        ? 'bg-gray-900 text-white border border-gray-700 hover:bg-gray-800' 
+                        : 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200/80'
                     }`}
                   />
                 )}
               </div>
               
-              {/* 開始時間ボタン */}
+              {/* 開始時間 */}
               <div className="relative">
-                <button
-                  type="button"
+                <input
+                  type="time"
                   disabled={addModalState.isAllDay}
-                  onClick={() => setActiveTimePicker(activeTimePicker === 'start' ? null : 'start')}
-                  className={`px-2 py-1 rounded font-bold transition-all ${
+                  value={`${String(addModalState.startHour).padStart(2, '0')}:${String(addModalState.startMin).padStart(2, '0')}`}
+                  onChange={e => {
+                    if (e.target.value) {
+                      const [h, m] = e.target.value.split(':').map(Number);
+                      handleStartTimeSelect(h, m);
+                    }
+                  }}
+                  style={{ colorScheme: isDark ? 'dark' : 'light' }}
+                  className={`px-2 py-1 rounded font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 text-[11px] cursor-pointer transition-all ${
                     addModalState.isAllDay ? 'opacity-40 cursor-not-allowed bg-gray-500/10' : ''
                   } ${
-                    activeTimePicker === 'start'
-                      ? 'bg-blue-500 text-white border border-blue-500 shadow-md scale-95'
-                      : isDark ? 'bg-gray-850 text-white hover:bg-gray-800' : 'bg-gray-100 text-gray-800 hover:bg-gray-200/80'
+                    isDark 
+                      ? 'bg-gray-900 text-white border border-gray-700 hover:bg-gray-800' 
+                      : 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200/80'
                   }`}
-                >
-                  {addModalState.dateObj ? `${addModalState.startHour}:${String(addModalState.startMin).padStart(2, '0')}` : ''}
-                </button>
-                
-                {activeTimePicker === 'start' && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setActiveTimePicker(null)}></div>
-                    <div className={`time-picker-options-container absolute left-0 mt-1 w-28 max-h-48 overflow-y-auto rounded-lg border p-0.5 shadow-xl z-50 animate-fade-in ${
-                      isDark ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-850'
-                    }`}>
-                      {TIME_OPTIONS.map((opt, oIdx) => (
-                        <button
-                          key={oIdx}
-                          type="button"
-                          onClick={() => handleStartTimeSelect(opt.hour, opt.min)}
-                          className={`w-full text-left px-2 py-1 text-[11px] font-bold rounded transition-colors ${
-                            addModalState.startHour === opt.hour && addModalState.startMin === opt.min
-                              ? 'bg-blue-500 text-white'
-                              : isDark ? 'hover:bg-gray-800 text-gray-200' : 'hover:bg-gray-100 text-gray-700'
-                          }`}
-                        >
-                          {opt.hour}:{String(opt.min).padStart(2, '0')}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
+                />
               </div>
-
+              
               <span className="text-gray-400 font-bold">-</span>
 
-              {/* 終了時間ボタン */}
+              {/* 終了時間 */}
               <div className="relative">
-                <button
-                  type="button"
+                <input
+                  type="time"
                   disabled={addModalState.isAllDay}
-                  onClick={() => setActiveTimePicker(activeTimePicker === 'end' ? null : 'end')}
-                  className={`px-2 py-1 rounded font-bold transition-all ${
+                  value={`${String(addModalState.endHour).padStart(2, '0')}:${String(addModalState.endMin).padStart(2, '0')}`}
+                  onChange={e => {
+                    if (e.target.value) {
+                      const [h, m] = e.target.value.split(':').map(Number);
+                      handleEndTimeSelect(h, m);
+                    }
+                  }}
+                  style={{ colorScheme: isDark ? 'dark' : 'light' }}
+                  className={`px-2 py-1 rounded font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 text-[11px] cursor-pointer transition-all ${
                     addModalState.isAllDay ? 'opacity-40 cursor-not-allowed bg-gray-500/10' : ''
                   } ${
-                    activeTimePicker === 'end'
-                      ? 'bg-blue-500 text-white border border-blue-500 shadow-md scale-95'
-                      : isDark ? 'bg-gray-850 text-white hover:bg-gray-800' : 'bg-gray-100 text-gray-800 hover:bg-gray-200/80'
+                    isDark 
+                      ? 'bg-gray-900 text-white border border-gray-700 hover:bg-gray-800' 
+                      : 'bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200/80'
                   }`}
-                >
-                  {addModalState.dateObj ? `${addModalState.endHour}:${String(addModalState.endMin).padStart(2, '0')}` : ''}
-                </button>
-                
-                {activeTimePicker === 'end' && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setActiveTimePicker(null)}></div>
-                    <div className={`time-picker-options-container absolute left-0 mt-1 w-28 max-h-48 overflow-y-auto rounded-lg border p-0.5 shadow-xl z-50 animate-fade-in ${
-                      isDark ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-850'
-                    }`}>
-                      {TIME_OPTIONS
-                        .filter(opt => (opt.hour * 60 + opt.min) > (addModalState.startHour * 60 + addModalState.startMin))
-                        .map((opt, oIdx) => (
-                          <button
-                            key={oIdx}
-                            type="button"
-                            onClick={() => handleEndTimeSelect(opt.hour, opt.min)}
-                            className={`w-full text-left px-2 py-1 text-[11px] font-bold rounded transition-colors ${
-                              addModalState.endHour === opt.hour && addModalState.endMin === opt.min
-                                ? 'bg-blue-500 text-white'
-                                : isDark ? 'hover:bg-gray-800 text-gray-200' : 'hover:bg-gray-100 text-gray-700'
-                            }`}
-                          >
-                            {opt.hour}:{String(opt.min).padStart(2, '0')}
-                          </button>
-                        ))}
-                    </div>
-                  </>
-                )}
+                />
               </div>
             </div>
 

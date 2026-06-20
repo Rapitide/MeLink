@@ -107,31 +107,6 @@ export const CalendarHeader = ({
             </>
           )}
         </div>
-
-        <button 
-          onClick={() => {
-            setAddModalState(prev => ({
-              ...prev,
-              isOpen: true,
-              dateObj: new Date(),
-              isEdit: false,
-              isDetailView: false,
-              title: '',
-              type: 'parttime',
-              location: '',
-              description: '',
-              isAllDay: false,
-              isPreviewActive: true,
-              isFixedSchedule: false,
-              dayOfWeek: new Date().getDay() || 1
-            }));
-            setActiveRightSidebar(true);
-          }}
-          className="bg-rose-500 hover:bg-rose-600 text-white text-xs font-black px-4 py-2 rounded-full shadow-md hover:shadow-rose-500/20 active:scale-95 transition-all flex items-center space-x-1.5"
-        >
-          <Plus size={14} strokeWidth={3} />
-          <span>追加</span>
-        </button>
       </div>
     </header>
   );
@@ -163,7 +138,9 @@ export const DayView = ({
   firestore,
   currentAccountId,
   deleteDoc,
-  doc
+  doc,
+  handleTempPreviewDragStart,
+  handleTempPreviewTouchStart
 }) => {
   const today = currentTime || new Date();
   
@@ -324,7 +301,19 @@ export const DayView = ({
                   <div
                     key={event.id}
                     onClick={(e) => { e.stopPropagation(); handleEventClick({ ...event, date: dayViewDay.fullDate }); }}
-                    className={`absolute left-0 right-0 rounded-xl p-2.5 flex flex-col justify-start overflow-hidden border border-transparent shadow-sm transition-all hover:scale-[1.002] hover:shadow-md active:scale-[0.99] cursor-pointer z-10 group ${classes}`}
+                    onMouseDown={(e) => {
+                      if (event.isTempPreview) {
+                        handleTempPreviewDragStart(e, event);
+                      }
+                    }}
+                    onTouchStart={(e) => {
+                      if (event.isTempPreview) {
+                        handleTempPreviewTouchStart(e, event);
+                      }
+                    }}
+                    className={`absolute left-0 right-0 rounded-xl p-2.5 flex flex-col justify-start overflow-hidden border border-transparent shadow-sm transition-all hover:scale-[1.002] hover:shadow-md active:scale-[0.99] z-10 group ${classes} ${
+                      event.isTempPreview ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                    }`}
                     style={{ top: `${top}px`, height: `${height}px`, minHeight: '28px', ...style }}
                   >
                     {event.isTempPreview && (
@@ -430,7 +419,9 @@ export const WeekView = ({
   firestore,
   currentAccountId,
   deleteDoc,
-  doc
+  doc,
+  handleTempPreviewDragStart,
+  handleTempPreviewTouchStart
 }) => {
   const today = currentTime || new Date();
   
@@ -649,7 +640,19 @@ export const WeekView = ({
                     <div
                       key={event.id}
                       onClick={(e) => { e.stopPropagation(); handleEventClick({ ...event, date: day.fullDate }); }}
-                      className={`absolute left-1 right-1 rounded-xl p-1.5 flex flex-col justify-start overflow-hidden border border-transparent transition-all hover:scale-[1.01] hover:shadow-lg active:scale-95 cursor-pointer z-10 group ${classes}`}
+                      onMouseDown={(e) => {
+                        if (event.isTempPreview) {
+                          handleTempPreviewDragStart(e, event);
+                        }
+                      }}
+                      onTouchStart={(e) => {
+                        if (event.isTempPreview) {
+                          handleTempPreviewTouchStart(e, event);
+                        }
+                      }}
+                      className={`absolute left-1 right-1 rounded-xl p-1.5 flex flex-col justify-start overflow-hidden border border-transparent transition-all hover:scale-[1.01] hover:shadow-lg active:scale-95 z-10 group ${classes} ${
+                        event.isTempPreview ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                      }`}
                       style={{ top: `${top}px`, height: `${height}px`, minHeight: '24px', ...style }}
                     >
                       {event.isTempPreview && (

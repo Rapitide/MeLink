@@ -543,7 +543,9 @@ export const MobileDayView = ({
   addModalState,
   scheduleCategories,
   handleGridClick,
-  handleEventClick
+  handleEventClick,
+  handleTempPreviewDragStart,
+  handleTempPreviewTouchStart
 }) => {
   const today = new Date();
   const weekDays = getWeekDaysForDate(currentDate);
@@ -722,7 +724,19 @@ export const MobileDayView = ({
                 <div
                   key={idx}
                   onClick={() => handleEventClick({ ...ev, date: currentDate })}
-                  className={`absolute right-2 left-14 rounded-xl px-2.5 py-1.5 shadow-sm cursor-pointer flex flex-col justify-start overflow-hidden transition-all hover:scale-[1.01] active:scale-95 border border-transparent ${classes}`}
+                  onMouseDown={(e) => {
+                    if (ev.isTempPreview) {
+                      handleTempPreviewDragStart(e, ev);
+                    }
+                  }}
+                  onTouchStart={(e) => {
+                    if (ev.isTempPreview) {
+                      handleTempPreviewTouchStart(e, ev);
+                    }
+                  }}
+                  className={`absolute right-2 left-14 rounded-xl px-2.5 py-1.5 shadow-sm z-10 flex flex-col justify-start overflow-hidden transition-all hover:scale-[1.01] active:scale-95 border border-transparent ${classes} ${
+                    ev.isTempPreview ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                  }`}
                   style={{ 
                     top: `${top}px`, 
                     height: `${height}px`,

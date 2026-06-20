@@ -227,6 +227,7 @@ export default function MainApp() {
   const [lastSeenNotifTime, setLastSeenNotifTime] = useState(Number(localStorage.getItem('last_seen_notif_time')) || 0);
 
   const [profileTab, setProfileTab] = useState('posts');
+  const [savedScrollPosition, setSavedScrollPosition] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [postLimit, setPostLimit] = useState(200);
 
@@ -304,14 +305,51 @@ export default function MainApp() {
 
   const sortedPosts = useMemo(() => [...posts].sort((a, b) => (b.isGlobalPinned ? 1 : 0) - (a.isGlobalPinned ? 1 : 0) || b.timestamp - a.timestamp), [posts]);
 
+  // タイムライン用: 返信ポスト(replyTo付き)を除外し、リポストを展開
   const filteredPosts = useMemo(() => {
+    // 返信ポストをタイムラインから除外
+    const timelinePosts = sortedPosts.filter(p => !p.replyTo);
+
+    // リポストを展開: 各ポストのrepostsマップを確認し、リポストされたポストを複製して挿入
+    const expanded = [];
+    const repostInserted = new Set(); // 重複防止
+    
+    for (const p of timelinePosts) {
+      // オリジナルポストを追加
+      expanded.push(p);
+      
+      // このポストをリポストしたユーザーの情報を展開
+      const reposts = (p.reposts && typeof p.reposts === 'object' && !Array.isArray(p.reposts)) ? p.reposts : {};
+      for (const [userId, repostData] of Object.entries(reposts)) {
+        if (userId === p.authorId) continue; // 自分自身のポストはスキップ
+        const repostKey = `${p.id}_repost_${userId}`;
+        if (repostInserted.has(repostKey)) continue;
+        repostInserted.add(repostKey);
+        
+        const repostTimestamp = (repostData && typeof repostData === 'object') ? repostData.timestamp : Date.now();
+        const repostByName = (repostData && typeof repostData === 'object') ? repostData.name : userId;
+        
+        expanded.push({
+          ...p,
+          _displayKey: repostKey,
+          _repostedBy: repostByName,
+          _repostTimestamp: repostTimestamp,
+          timestamp: repostTimestamp, // リポスト時刻でソート
+          _isRepostEntry: true
+        });
+      }
+    }
+
+    // リポスト展開後に再ソート
+    expanded.sort((a, b) => (b.isGlobalPinned && !b._isRepostEntry ? 1 : 0) - (a.isGlobalPinned && !a._isRepostEntry ? 1 : 0) || b.timestamp - a.timestamp);
+
     if (activeTab === 'フォロー中') {
-      return sortedPosts.filter(p => following[p.authorId]);
+      return expanded.filter(p => p._isRepostEntry ? following[p._repostedBy] || following[p.authorId] : following[p.authorId]);
     }
     if (activeTab === 'ブックマーク') {
-      return sortedPosts.filter(p => userBookmarks[p.id]);
+      return expanded.filter(p => userBookmarks[p.id]);
     }
-    return sortedPosts;
+    return expanded;
   }, [sortedPosts, activeTab, following, userBookmarks, currentAccountId]);
 
   useEffect(() => {
@@ -407,9 +445,24 @@ export default function MainApp() {
     const unsub = onSnapshot(doc(firestore, "globalData/badges"), async (snap) => {
       if (snap.exists()) {
         const data = snap.data();
-        if (data.admin) setVerifiedUsers(Object.keys(data.admin).filter(k => data.admin[k]));
-        if (data.veteran) setVeteranUsers(Object.keys(data.veteran).filter(k => data.veteran[k]));
-        if (data.naming) setNamingUsers(Object.keys(data.naming).filter(k => data.naming[k]));
+        if (data.admin) {
+          const fsAdmins = Object.keys(data.admin).filter(k => data.admin[k]);
+          setVerifiedUsers([...new Set([...fsAdmins, ...VERIFIED_USERS])]);
+        } else {
+          setVerifiedUsers(VERIFIED_USERS);
+        }
+        if (data.veteran) {
+          const fsVeterans = Object.keys(data.veteran).filter(k => data.veteran[k]);
+          setVeteranUsers([...new Set([...fsVeterans, ...VETERAN_USERS])]);
+        } else {
+          setVeteranUsers(VETERAN_USERS);
+        }
+        if (data.naming) {
+          const fsNamings = Object.keys(data.naming).filter(k => data.naming[k]);
+          setNamingUsers([...new Set([...fsNamings, ...NAMING_USERS])]);
+        } else {
+          setNamingUsers(NAMING_USERS);
+        }
       } else {
         const adminMap = {};
         VERIFIED_USERS.forEach(u => { adminMap[u] = true; });
@@ -459,6 +512,16 @@ export default function MainApp() {
     return () => unsub();
   }, [currentRoomId, postLimit]);
 
+  const prevActiveTabRef = useRef(activeTab);
+  useEffect(() => {
+    if (prevActiveTabRef.current === 'プロフィール' && activeTab !== 'プロフィール' && currentBottomTab === 'コミュニティ') {
+      setTimeout(() => {
+        window.scrollTo(0, savedScrollPosition);
+      }, 80);
+    }
+    prevActiveTabRef.current = activeTab;
+  }, [activeTab, currentBottomTab, savedScrollPosition]);
+
   useEffect(() => {
     if (viewingProfileId && currentRoomId) {
       const rs = sanitizeRoomId(currentRoomId);
@@ -481,9 +544,41 @@ export default function MainApp() {
     if (!profilePostsTargetId || !currentRoomId) { setProfilePosts([]); return; }
     setProfilePosts([]);
     const rs = sanitizeRoomId(currentRoomId);
-    const q = query(collection(firestore, `rooms/${rs}/posts`), orderBy('timestamp', 'desc'));
+    const q = query(collection(firestore, `rooms/${rs}/posts`), orderBy('timestamp', 'desc'), limit(150));
     const unsub = onSnapshot(q, (snap) => {
-      setProfilePosts(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(p => p.authorId === profilePostsTargetId));
+      const allRoomPosts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const userTimeline = [];
+      const repostInserted = new Set();
+      
+      for (const p of allRoomPosts) {
+        // 返信ポストはプロフィール一覧には直接表示しない(本家Xの「ポスト」タブと同様に通常ポストとリポストのみ表示)
+        if (p.replyTo) continue;
+
+        if (p.authorId === profilePostsTargetId) {
+          userTimeline.push(p);
+        }
+        
+        const reposts = (p.reposts && typeof p.reposts === 'object' && !Array.isArray(p.reposts)) ? p.reposts : {};
+        if (reposts[profilePostsTargetId] && p.authorId !== profilePostsTargetId) {
+          const repostData = reposts[profilePostsTargetId];
+          const repostTimestamp = (repostData && typeof repostData === 'object') ? repostData.timestamp : Date.now();
+          const repostByName = (repostData && typeof repostData === 'object') ? repostData.name : profilePostsTargetId;
+          const repostKey = `${p.id}_profile_repost_${profilePostsTargetId}`;
+          if (!repostInserted.has(repostKey)) {
+            repostInserted.add(repostKey);
+            userTimeline.push({
+              ...p,
+              _displayKey: repostKey,
+              _repostedBy: repostByName,
+              _repostTimestamp: repostTimestamp,
+              timestamp: repostTimestamp,
+              _isRepostEntry: true
+            });
+          }
+        }
+      }
+      userTimeline.sort((a, b) => b.timestamp - a.timestamp);
+      setProfilePosts(userTimeline);
     });
     return () => unsub();
   }, [profilePostsTargetId, currentRoomId]);
@@ -1029,10 +1124,27 @@ export default function MainApp() {
     }
   };
 
-  const openUserProfile = (userId) => {
+  const openUserProfile = (userId, fallbackData = null) => {
     if (userId === currentAccountId) setCurrentBottomTab('プロフィール');
-    else { setCurrentBottomTab('コミュニティ'); setViewingProfileId(userId); setActiveTab('プロフィール'); }
-    window.scrollTo(0, 0);
+    else {
+      setSavedScrollPosition(window.scrollY);
+      setCurrentBottomTab('コミュニティ');
+      if (fallbackData) {
+        setViewingUserProfile({
+          id: userId,
+          name: fallbackData.name || '名無し',
+          avatarUrl: fallbackData.avatarUrl || null,
+          avatarColor: fallbackData.avatarColor || 'bg-blue-500',
+          bio: '読み込み中...',
+          ...fallbackData
+        });
+      } else {
+        setViewingUserProfile(null);
+      }
+      setViewingProfileId(userId);
+      setActiveTab('プロフィール');
+    }
+    setTimeout(() => window.scrollTo(0, 0), 50);
   };
 
   const openFollowList = async (title, idMap) => {
@@ -2041,43 +2153,46 @@ export default function MainApp() {
 
         {/* ⚠️ コミュニティ（掲示板）タブ */}
         {currentBottomTab === 'コミュニティ' && (
-          <CommunityComponent
-            firestore={firestore}
-            currentRoomId={currentRoomId}
-            currentAccountId={currentAccountId}
-            currentUserProfile={currentUserProfile}
-            isAdmin={isAdmin}
-            following={following}
-            followers={followers}
-            userBookmarks={userBookmarks}
-            expandedPostId={expandedPostId}
-            setExpandedPostId={setExpandedPostId}
-            toggleFollow={toggleFollow}
-            openUserProfile={openUserProfile}
-            formatTimeAgo={formatTimeAgo}
-            sanitizeRoomId={sanitizeRoomId}
-            VERIFIED_USERS={verifiedUsers}
-            VETERAN_USERS={veteranUsers}
-            NAMING_USERS={namingUsers}
-            setBadgeModal={setBadgeModal}
-            openFollowList={openFollowList}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            viewingUserProfile={viewingUserProfile}
-            viewingProfileId={viewingProfileId}
-            viewingFollowers={viewingFollowers}
-            viewingFollowing={viewingFollowing}
-            visiblePosts={filteredPosts}
-            isLoading={isLoading}
-            postLimit={postLimit}
-            setPostLimit={setPostLimit}
-            displayedPosts={filteredPosts}
-            profilePosts={profilePosts}
-            setIsRoomModalOpen={setIsRoomModalOpen}
-            ensureRoomListed={() => addRoomToHistory(currentRoomId, currentAccountId)}
-            Avatar={Avatar}
-            isDark={isDark}
-          />
+          <ErrorBoundary>
+            <CommunityComponent
+              firestore={firestore}
+              currentRoomId={currentRoomId}
+              currentAccountId={currentAccountId}
+              currentUserProfile={currentUserProfile}
+              isAdmin={isAdmin}
+              following={following}
+              followers={followers}
+              userBookmarks={userBookmarks}
+              expandedPostId={expandedPostId}
+              setExpandedPostId={setExpandedPostId}
+              toggleFollow={toggleFollow}
+              openUserProfile={openUserProfile}
+              formatTimeAgo={formatTimeAgo}
+              sanitizeRoomId={sanitizeRoomId}
+              VERIFIED_USERS={verifiedUsers}
+              VETERAN_USERS={veteranUsers}
+              NAMING_USERS={namingUsers}
+              setBadgeModal={setBadgeModal}
+              openFollowList={openFollowList}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              viewingUserProfile={viewingUserProfile}
+              viewingProfileId={viewingProfileId}
+              viewingFollowers={viewingFollowers}
+              viewingFollowing={viewingFollowing}
+              visiblePosts={filteredPosts}
+              isLoading={isLoading}
+              postLimit={postLimit}
+              setPostLimit={setPostLimit}
+              displayedPosts={filteredPosts}
+              profilePosts={profilePosts}
+              setIsRoomModalOpen={setIsRoomModalOpen}
+              ensureRoomListed={() => addRoomToHistory(currentRoomId, currentAccountId)}
+              Avatar={Avatar}
+              isDark={isDark}
+              allPosts={posts}
+            />
+          </ErrorBoundary>
         )}
 
         {/* ⚠️ プロフィールタブ */}
@@ -2128,7 +2243,14 @@ export default function MainApp() {
               {profileTab === 'posts' && (() => {
                 const myPosts = profilePosts;
                 if (myPosts.length === 0 && !isLoading) return <div className={`p-10 text-center font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>ポストがありません。</div>;
-                return myPosts.map(p => <PostItem key={p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={verifiedUsers} VETERAN_USERS={veteranUsers} NAMING_USERS={namingUsers} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} />);
+                return myPosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={verifiedUsers} VETERAN_USERS={veteranUsers} NAMING_USERS={namingUsers} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={posts} onNavigateToPost={(id) => {
+                  setCurrentBottomTab('コミュニティ');
+                  setExpandedPostId(id);
+                  setTimeout(() => {
+                    const el = document.getElementById(`post-${id}`);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 150);
+                }} />);
               })()}
               {profileTab === 'settings' && (
                 <div className="p-4 space-y-3.5 select-none animate-[fadeIn_0.2s_ease-out]">
@@ -2245,4 +2367,33 @@ export default function MainApp() {
       </div>
     </div>
   );
+}
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '20px', color: 'red', background: '#fee', border: '1px solid #fcc', borderRadius: '8px', margin: '20px', overflow: 'auto', zIndex: 9999, position: 'relative' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '10px' }}>掲示板コンポーネントでエラーが発生しました</h2>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '14px', fontWeight: 'bold' }}>
+            {this.state.error && this.state.error.toString()}
+          </pre>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '11px', marginTop: '10px', color: '#666' }}>
+            {this.state.error && this.state.error.stack}
+          </pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }

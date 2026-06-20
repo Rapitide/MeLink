@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, Suspense, useRef, useEffect } from 'react';
 import { doc, setDoc, updateDoc, deleteDoc, collection, addDoc, deleteField } from 'firebase/firestore';
-import { Heart, MessageCircle, Bookmark, Pin, Trash2, CheckCircle, BadgeCheck, BarChart2, Loader2, Plus, ArrowLeft } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, Pin, Trash2, CheckCircle, BadgeCheck, BarChart2, Loader2, Plus, ArrowLeft, Repeat, Smile } from 'lucide-react';
+
+const EmojiPicker = React.lazy(() => import('emoji-picker-react'));
 
 const renderTextWithLinks = (text) => {
   if (!text) return null;
@@ -30,9 +32,176 @@ export const PostItem = ({
   isAdmin, following, userBookmarks, expandedPostId, setExpandedPostId,
   toggleFollow, openUserProfile, formatTimeAgo, sanitizeRoomId,
   VERIFIED_USERS, VETERAN_USERS, NAMING_USERS, setBadgeModal, Avatar,
-  isDark
+  isDark, allPosts, onNavigateToPost, isReplyThreadItem = false
 }) => {
   const [replyContent, setReplyContent] = useState('');
+  const [isReplying, setIsReplying] = useState(false);
+  const [showRepostMenu, setShowRepostMenu] = useState(false);
+  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+  const [quoteComment, setQuoteComment] = useState('');
+  const [isPostingQuote, setIsPostingQuote] = useState(false);
+  const [showEmojiPalette, setShowEmojiPalette] = useState(false);
+  const [showAllEmojiPicker, setShowAllEmojiPicker] = useState(false);
+  const [pickerDirection, setPickerDirection] = useState('up'); // 'up' or 'down'
+  const smileButtonRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (smileButtonRef.current && !smileButtonRef.current.contains(event.target)) {
+        setShowEmojiPalette(false);
+        setShowAllEmojiPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // レガシー返信リストの作成（型安全ガード付き）
+  const legacyRepliesList = useMemo(() => {
+    if (!p) return [];
+    const rawReplies = (p.replies && typeof p.replies === 'object' && !Array.isArray(p.replies)) ? p.replies : {};
+    return Object.entries(rawReplies).map(([replyId, r]) => {
+      if (!r) return null;
+      return {
+        id: `${p.id}_reply_${replyId}`,
+        replyId,
+        parentPostId: p.id,
+        authorId: r.authorId,
+        authorName: r.authorName,
+        authorColor: r.authorColor,
+        authorAvatarUrl: r.authorAvatarUrl,
+        content: r.content,
+        timestamp: r.timestamp,
+        likes: (r.likes && typeof r.likes === 'object' && !Array.isArray(r.likes)) ? r.likes : {},
+        reactions: (r.reactions && typeof r.reactions === 'object' && !Array.isArray(r.reactions)) ? r.reactions : {},
+        _isLegacyReply: true
+      };
+    }).filter(Boolean);
+  }, [p?.replies, p?.id]);
+
+  // 新システム返信の取得
+  const newRepliesList = useMemo(() => {
+    if (!p || !allPosts) return [];
+    return allPosts
+      .filter(post => post.replyTo === p.id)
+      .sort((a, b) => a.timestamp - b.timestamp);
+  }, [allPosts, p?.id]);
+
+  // 新旧統合返信リスト
+  const allRepliesList = useMemo(() => {
+    return [...legacyRepliesList, ...newRepliesList].sort((a, b) => a.timestamp - b.timestamp);
+  }, [legacyRepliesList, newRepliesList]);
+
+  // 引用ポストの取得
+  const quotedPost = useMemo(() => {
+    if (!p || !p.quoteTo || !allPosts) return null;
+    return allPosts.find(post => post.id === p.quoteTo);
+  }, [p?.quoteTo, allPosts]);
+
+  const handleOpenAllEmojiPicker = (e) => {
+    e.stopPropagation();
+    if (smileButtonRef.current) {
+      const rect = smileButtonRef.current.getBoundingClientRect();
+      // 画面上部からSmileボタンまでの高さが380px未満の場合、下向きに表示
+      if (rect.top < 380) {
+        setPickerDirection('down');
+      } else {
+        setPickerDirection('up');
+      }
+    }
+    setShowAllEmojiPicker(!showAllEmojiPicker);
+    setShowEmojiPalette(false);
+  };
+
+  const handleOpenEmojiPalette = (e) => {
+    e.stopPropagation();
+    if (smileButtonRef.current) {
+      const rect = smileButtonRef.current.getBoundingClientRect();
+      // 画面上部からSmileボタンまでの高さが200px未満の場合、下向きに表示
+      if (rect.top < 200) {
+        setPickerDirection('down');
+      } else {
+        setPickerDirection('up');
+      }
+    }
+    setShowEmojiPalette(!showEmojiPalette);
+    setShowAllEmojiPicker(false);
+  };
+
+  const toggleReaction = async (post, emoji) => {
+    if (!currentUserProfile) return;
+    if (post._isLegacyReply) {
+      const parentRef = doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${post.parentPostId}`);
+      const hasReacted = post.reactions && post.reactions[emoji] && post.reactions[emoji][currentAccountId];
+      if (hasReacted) {
+        updateDoc(parentRef, {
+          [`replies.${post.replyId}.reactions.${emoji}.${currentAccountId}`]: deleteField()
+        }).catch(console.error);
+      } else {
+        updateDoc(parentRef, {
+          [`replies.${post.replyId}.reactions.${emoji}.${currentAccountId}`]: currentUserProfile.name
+        }).catch(console.error);
+      }
+    } else {
+      const postRef = doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${post.id}`);
+      const hasReacted = post.reactions && post.reactions[emoji] && post.reactions[emoji][currentAccountId];
+      if (hasReacted) {
+        updateDoc(postRef, {
+          [`reactions.${emoji}.${currentAccountId}`]: deleteField()
+        }).catch(console.error);
+      } else {
+        updateDoc(postRef, {
+          [`reactions.${emoji}.${currentAccountId}`]: currentUserProfile.name
+        }).catch(console.error);
+      }
+    }
+  };
+
+  const toggleRepost = async (post, e) => {
+    e.stopPropagation();
+    if (!currentUserProfile) return;
+    const postRef = doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${post.id}`);
+    const hasReposted = post.reposts && post.reposts[currentAccountId];
+    if (hasReposted) {
+      setDoc(postRef, { reposts: { [currentAccountId]: deleteField() } }, { merge: true }).catch(console.error);
+    } else {
+      setDoc(postRef, { reposts: { [currentAccountId]: { name: currentUserProfile.name, timestamp: Date.now() } } }, { merge: true }).catch(console.error);
+    }
+  };
+
+  const handleQuoteRepost = async (e) => {
+    e.preventDefault();
+    if (!quoteComment.trim() || !currentUserProfile || isPostingQuote) return;
+    setIsPostingQuote(true);
+    try {
+      // サーバー側のネットワーク応答(ACK)を待たずに即座にモーダルを閉じるため、awaitを外してバックグラウンドで書き込みを行います。
+      // Firestoreの楽観的UI更新によりタイムラインには即座に投稿が表示され、モーダルも瞬時に閉じます。
+      addDoc(collection(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts`), {
+        authorId: currentAccountId,
+        authorName: currentUserProfile.name,
+        authorHandle: currentUserProfile.handle,
+        authorColor: currentUserProfile.avatarColor,
+        authorAvatarUrl: currentUserProfile.avatarUrl || null,
+        content: quoteComment,
+        timestamp: Date.now(),
+        quoteTo: p.id,
+        likes: {},
+        reposts: {},
+        poll: null
+      }).catch(err => {
+        alert("引用リポストの送信に失敗しました。");
+        console.error("Background quote repost failed:", err);
+      });
+
+      setQuoteComment('');
+      setIsQuoteModalOpen(false);
+    } catch (err) {
+      alert("引用リポストに失敗しました。");
+      console.error(err);
+    } finally {
+      setIsPostingQuote(false);
+    }
+  };
 
   const handleVote = async (postId, choiceIndex, e) => {
     e.stopPropagation();
@@ -40,20 +209,58 @@ export const PostItem = ({
   };
   const handleReply = async (postId, e) => {
     e.preventDefault();
-    if (!replyContent.trim() || !currentUserProfile) return;
+    if (!replyContent.trim() || !currentUserProfile || isReplying) return;
+    setIsReplying(true);
     try {
-      const replyId = Date.now().toString() + Math.floor(Math.random() * 1000);
-      await setDoc(doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${postId}`), { replies: { [replyId]: { authorId: currentAccountId, authorName: currentUserProfile.name, authorColor: currentUserProfile.avatarColor, authorAvatarUrl: currentUserProfile.avatarUrl || null, content: replyContent, timestamp: Date.now() } } }, { merge: true });
+      addDoc(collection(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts`), {
+        authorId: currentAccountId,
+        authorName: currentUserProfile.name,
+        authorHandle: currentUserProfile.handle,
+        authorColor: currentUserProfile.avatarColor,
+        authorAvatarUrl: currentUserProfile.avatarUrl || null,
+        content: replyContent,
+        timestamp: Date.now(),
+        replyTo: postId,
+        replyToAuthor: p.authorName || '名無し',
+        replyToAuthorId: p.authorId || '',
+        likes: {},
+        reposts: {},
+        poll: null
+      }).catch(err => {
+        alert("返信に失敗しました");
+        console.error(err);
+      });
       setReplyContent('');
-    } catch (err) { alert("返信に失敗しました"); }
+    } catch (err) {
+      alert("返信に失敗しました");
+      console.error(err);
+    } finally {
+      setIsReplying(false);
+    }
   };
+
   const toggleLike = async (post, e) => {
     e.stopPropagation();
     if (!currentUserProfile) return;
-    const postRef = doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${post.id}`);
-    if (post.likes && post.likes[currentAccountId]) setDoc(postRef, { likes: { [currentAccountId]: deleteField() } }, { merge: true }).catch(console.error);
-    else setDoc(postRef, { likes: { [currentAccountId]: currentUserProfile.name } }, { merge: true }).catch(console.error);
+    if (post._isLegacyReply) {
+      const parentRef = doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${post.parentPostId}`);
+      const hasLiked = post.likes && post.likes[currentAccountId];
+      if (hasLiked) {
+        updateDoc(parentRef, {
+          [`replies.${post.replyId}.likes.${currentAccountId}`]: deleteField()
+        }).catch(console.error);
+      } else {
+        updateDoc(parentRef, {
+          [`replies.${post.replyId}.likes.${currentAccountId}`]: currentUserProfile.name
+        }).catch(console.error);
+      }
+    } else {
+      const postRef = doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${post.id}`);
+      if (post.likes && post.likes[currentAccountId]) setDoc(postRef, { likes: { [currentAccountId]: deleteField() } }, { merge: true }).catch(console.error);
+      else setDoc(postRef, { likes: { [currentAccountId]: currentUserProfile.name } }, { merge: true }).catch(console.error);
+    }
   };
+
   const toggleBookmark = async (post, e) => {
     e.stopPropagation();
     if (!currentUserProfile) return;
@@ -61,21 +268,41 @@ export const PostItem = ({
     if (userBookmarks[post.id]) setDoc(bookmarkRef, { posts: { [post.id]: deleteField() } }, { merge: true }).catch(console.error);
     else setDoc(bookmarkRef, { posts: { [post.id]: true } }, { merge: true }).catch(console.error);
   };
+
   const toggleGlobalPin = async (post, e) => {
     e.stopPropagation();
     if (isAdmin) updateDoc(doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${post.id}`), { isGlobalPinned: !post.isGlobalPinned });
   };
-  const handleDelete = async (postId, e) => {
+
+  const handleDelete = async (post, e) => {
     e.stopPropagation();
-    if (window.confirm("この投稿を削除しますか？")) deleteDoc(doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${postId}`));
+    if (post._isLegacyReply) {
+      if (window.confirm("この返信を削除しますか？")) {
+        const parentRef = doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${post.parentPostId}`);
+        updateDoc(parentRef, {
+          [`replies.${post.replyId}`]: deleteField()
+        }).catch(console.error);
+      }
+    } else {
+      if (window.confirm("この投稿を削除しますか？")) {
+        deleteDoc(doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${post.id}`));
+      }
+    }
   };
 
   try {
     if (!p) return null;
-    const likes = p.likes || {}, likeNames = Object.values(likes), likeCount = likeNames.length, isLiked = likes[currentAccountId];
-    const replies = p.replies || {}, replyCount = Object.keys(replies).length;
+    const likes = (p.likes && typeof p.likes === 'object' && !Array.isArray(p.likes)) ? p.likes : {};
+    const likeNames = Object.values(likes).filter(n => typeof n === 'string'), likeCount = likeNames.length, isLiked = likes[currentAccountId];
     const isFollowing = following[p.authorId], isBookmarked = userBookmarks[p.id];
     const authorName = p.authorName || '名無し', authorAvatarUrl = p.authorAvatarUrl || null, authorColor = p.authorColor || 'bg-blue-500';
+
+    // リポスト関連
+    const reposts = (p.reposts && typeof p.reposts === 'object' && !Array.isArray(p.reposts)) ? p.reposts : {};
+    const repostCount = Object.keys(reposts).length;
+    const hasReposted = !!reposts[currentAccountId];
+
+    const totalReplyCount = allRepliesList.length;
 
     let pollTotalVotes = 0, pollResults = [], hasVoted = false, isPollExpired = false, myVoteIndex = null;
     if (p.poll && p.poll.choices) {
@@ -89,14 +316,55 @@ export const PostItem = ({
     }
 
     return (
-      <div key={p.id} className={`p-4 flex flex-col transition-colors cursor-pointer border-b ${isDark ? 'border-gray-800' : 'border-gray-150'} ${p.isGlobalPinned ? (isDark ? 'bg-yellow-900/20 hover:bg-yellow-900/30' : 'bg-yellow-50 hover:bg-yellow-100/50') : (isDark ? 'bg-black hover:bg-gray-900' : 'bg-white hover:bg-gray-50')}`} onClick={() => setExpandedPostId(expandedPostId === p.id ? null : p.id)}>
+      <div 
+        key={p.id} 
+        id={`post-${p.id}`}
+        className={`relative p-4 flex flex-col transition-colors cursor-pointer border-b ${
+          isDark ? 'border-gray-800' : 'border-gray-150'
+        } ${
+          p.isGlobalPinned 
+            ? (isDark ? 'bg-yellow-900/20 hover:bg-yellow-900/30' : 'bg-yellow-50 hover:bg-yellow-100/50') 
+            : (isReplyThreadItem ? 'bg-transparent hover:bg-gray-50/5 dark:hover:bg-gray-950/5' : (isDark ? 'bg-black hover:bg-gray-900' : 'bg-white hover:bg-gray-50'))
+        } ${isReplyThreadItem ? 'border-none pb-1 pt-1' : ''}`} 
+        onClick={() => setExpandedPostId(expandedPostId === p.id ? null : p.id)}
+        style={{ zIndex: (showEmojiPalette || showAllEmojiPicker || showRepostMenu || isQuoteModalOpen) ? 50 : 1 }}
+      >
+        {/* スレッド縦ラインの接続描画 */}
+        {isReplyThreadItem && (
+          <div 
+            className={`absolute left-[36px] top-0 bottom-0 w-0.5 -translate-x-1/2`} 
+            style={{ 
+              backgroundColor: isDark ? '#2f3336' : '#e1e8ed',
+              zIndex: -1
+            }} 
+          />
+        )}
+        {allRepliesList.length > 0 && expandedPostId === p.id && (
+          <div 
+            className={`absolute left-[36px] top-[56px] bottom-0 w-0.5 -translate-x-1/2`} 
+            style={{ 
+              backgroundColor: isDark ? '#2f3336' : '#e1e8ed',
+              zIndex: -1
+            }} 
+          />
+        )}
+
+        {p._isRepostEntry && (
+          <div className={`flex items-center space-x-2 text-xs mb-1.5 font-bold ml-9 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+            <Repeat size={12} className="text-gray-500" />
+            <span>{p._repostedBy === currentUserProfile?.name ? 'あなた' : p._repostedBy} がリポストしました</span>
+          </div>
+        )}
+
         {p.isGlobalPinned && <div className="flex items-center space-x-2 text-yellow-500 text-xs mb-2 font-semibold ml-12"><Pin size={14} className="fill-current" /><span>公式ピン留め</span></div>}
         <div className="flex space-x-3">
-          <div className="flex-shrink-0" onClick={(e) => { e.stopPropagation(); openUserProfile(p.authorId); }}><Avatar src={authorAvatarUrl} name={authorName} color={authorColor} /></div>
+          <div className="flex-shrink-0 relative" style={{ zIndex: 2 }} onClick={(e) => { e.stopPropagation(); openUserProfile(p.authorId, { name: authorName, avatarUrl: authorAvatarUrl, avatarColor: authorColor }); }}>
+            <Avatar src={authorAvatarUrl} name={authorName} color={authorColor} />
+          </div>
           <div className="flex-grow min-w-0">
             <div className="flex items-center justify-between min-w-0">
               <div className="flex items-center space-x-1.5 truncate">
-                <div className="flex items-center space-x-1.5 truncate cursor-pointer" onClick={(e) => { e.stopPropagation(); openUserProfile(p.authorId); }}>
+                <div className="flex items-center space-x-1.5 truncate cursor-pointer" onClick={(e) => { e.stopPropagation(); openUserProfile(p.authorId, { name: authorName, avatarUrl: authorAvatarUrl, avatarColor: authorColor }); }}>
                   <span className={`font-bold truncate hover:underline flex items-center ${isDark ? 'text-white' : 'text-gray-900'}`}>{authorName}{(VERIFIED_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'admin' }); }} size={16} className="text-black fill-yellow-500 ml-1 flex-shrink-0 cursor-pointer" />}{(VETERAN_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'veteran' }); }} size={16} className="text-black fill-blue-500 ml-1 flex-shrink-0 cursor-pointer" />}{(NAMING_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'naming' }); }} size={16} className="text-black fill-pink-500 ml-1 flex-shrink-0 cursor-pointer" />}</span>
                   <span className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-sm truncate max-w-[80px] sm:max-w-none`}>@{p.authorId}</span><span className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-sm whitespace-nowrap`}>· {formatTimeAgo(p.timestamp)}</span>
                 </div>
@@ -104,10 +372,44 @@ export const PostItem = ({
               </div>
               <div className="flex items-center text-gray-500 flex-shrink-0">
                 {isAdmin && <button onClick={e => toggleGlobalPin(p, e)} className={`p-1.5 rounded-full ${isDark ? 'hover:bg-yellow-900/30 text-gray-500 hover:text-yellow-500' : 'hover:bg-yellow-100 text-gray-400 hover:text-yellow-500'} transition-colors ${p.isGlobalPinned ? 'text-yellow-500' : ''}`} title="公式ピン留め"><Pin size={16} className={p.isGlobalPinned ? 'fill-current' : ''} /></button>}
-                {(p.authorId === currentAccountId || isAdmin) && <button onClick={e => handleDelete(p.id, e)} className={`p-1.5 rounded-full ${isDark ? 'hover:bg-red-900/30 text-gray-500 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'} transition-colors ml-1`}><Trash2 size={16} /></button>}
+                {(p.authorId === currentAccountId || isAdmin) && <button onClick={e => handleDelete(p, e)} className={`p-1.5 rounded-full ${isDark ? 'hover:bg-red-900/30 text-gray-500 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'} transition-colors ml-1`}><Trash2 size={16} /></button>}
               </div>
             </div>
+            {p.replyTo && p.replyToAuthor && (
+              <div className={`text-xs mt-0.5 mb-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                返信先: <span className="text-blue-500 hover:underline cursor-pointer" onClick={(e) => { e.stopPropagation(); openUserProfile(p.replyToAuthorId, { name: p.replyToAuthor || '名無し' }); }}>@{p.replyToAuthorId}</span>
+              </div>
+            )}
             <p className={`mt-1 whitespace-pre-wrap break-words text-[15px] leading-normal ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{renderTextWithLinks(p.content)}</p>
+
+            {/* 引用プレビューカードの描画 */}
+            {p.quoteTo && (
+              <div className="mt-2.5" onClick={e => e.stopPropagation()}>
+                {quotedPost ? (
+                  <div 
+                    className={`border rounded-2xl p-3 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] cursor-pointer transition-colors duration-150 ${isDark ? 'border-[#2f3336]' : 'border-[#cfd9de]'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onNavigateToPost) {
+                        onNavigateToPost(quotedPost.id);
+                      } else {
+                        setExpandedPostId(quotedPost.id);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center space-x-1.5 truncate">
+                      <Avatar src={quotedPost.authorAvatarUrl} name={quotedPost.authorName} color={quotedPost.authorColor} size="xs" />
+                      <span className={`font-bold text-[14px] truncate hover:underline ${isDark ? 'text-white' : 'text-gray-900'}`}>{quotedPost.authorName}</span>
+                      <span className={`text-[13px] ${isDark ? 'text-gray-500' : 'text-gray-500'} truncate`}>@{quotedPost.authorId}</span>
+                      <span className={`text-[13px] ${isDark ? 'text-gray-500' : 'text-gray-500'} whitespace-nowrap`}>· {formatTimeAgo(quotedPost.timestamp)}</span>
+                    </div>
+                    <p className={`mt-1.5 text-[14px] leading-normal break-words whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{renderTextWithLinks(quotedPost.content)}</p>
+                  </div>
+                ) : (
+                  <div className={`border rounded-2xl p-3 text-xs italic ${isDark ? 'border-[#2f3336] text-gray-500 bg-gray-950/20' : 'border-[#cfd9de] text-gray-400 bg-gray-50/20'}`}>このポストは削除されました</div>
+                )}
+              </div>
+            )}
 
             {p.poll && (
               <div className={`mt-3 border rounded-xl p-4 bg-transparent ${isDark ? 'border-gray-800' : 'border-gray-200'}`} onClick={e => e.stopPropagation()}>
@@ -127,36 +429,257 @@ export const PostItem = ({
               </div>
             )}
 
-            <div className={`mt-3 flex items-center justify-between max-w-md ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-              <div className="flex items-center space-x-1 hover:text-blue-500 transition-colors group" onClick={(e) => { e.stopPropagation(); setExpandedPostId(expandedPostId === p.id ? null : p.id); }}><div className={`p-2 rounded-full ${isDark ? 'group-hover:bg-blue-900/30' : 'group-hover:bg-blue-50'} transition-colors`}><MessageCircle size={18} /></div><span className="text-xs">{replyCount || ''}</span></div>
-              <div className={`flex items-center space-x-1 transition-colors group ${isLiked ? 'text-pink-500' : 'hover:text-pink-500'}`} onClick={e => toggleLike(p, e)}><div className={`p-2 rounded-full ${isDark ? 'group-hover:bg-pink-900/30' : 'group-hover:bg-pink-50'} transition-colors`}><Heart size={18} className={isLiked ? 'fill-current' : ''} /></div><span className="text-xs">{likeCount || ''}</span></div>
-              <div className={`flex items-center space-x-1 transition-colors group ${isBookmarked ? 'text-blue-500' : 'hover:text-blue-500'}`} onClick={e => toggleBookmark(p, e)}><div className={`p-2 rounded-full ${isDark ? 'group-hover:bg-blue-900/30' : 'group-hover:bg-blue-50'} transition-colors`}><Bookmark size={18} className={isBookmarked ? 'fill-current' : ''} /></div></div>
-            </div>
-            {likeCount > 0 && <div className={`mt-2.5 text-[13px] flex items-start p-2.5 rounded-xl border w-fit max-w-full ${isDark ? 'text-gray-400 bg-gray-900 border-gray-800' : 'text-gray-600 bg-gray-50 border-gray-150'}`}><Heart size={14} className="mr-1.5 mt-0.5 flex-shrink-0 fill-pink-500 text-pink-500" /><span className="font-medium leading-relaxed break-words">{likeNames.join(', ')} がいいねしました</span></div>}
-
-            {expandedPostId === p.id && (
-              <div className={`mt-4 border-t pt-4 ${isDark ? 'border-gray-800' : 'border-gray-150'}`} onClick={e => e.stopPropagation()}>
-                {Object.entries(replies).sort(([, a], [, b]) => a.timestamp - b.timestamp).map(([replyId, r]) => {
-                  if (!r) return null;
+            {/* リアクションバッジ表示エリア */}
+            {p.reactions && typeof p.reactions === 'object' && !Array.isArray(p.reactions) && Object.entries(p.reactions).some(([_, users]) => users && Object.keys(users).length > 0) && (
+              <div className="flex flex-wrap gap-1.5 mt-3 select-none" onClick={e => e.stopPropagation()}>
+                {Object.entries(p.reactions).map(([emoji, users]) => {
+                  if (!users || Object.keys(users).length === 0) return null;
+                  const userList = Object.values(users);
+                  const userCount = userList.length;
+                  const hasReacted = !!users[currentAccountId];
+                  
                   return (
-                    <div key={replyId} className="flex space-x-3 mb-4">
-                      <div onClick={() => openUserProfile(r.authorId)} className="cursor-pointer flex-shrink-0"><Avatar src={r.authorAvatarUrl} name={r.authorName} color={r.authorColor} size="sm" /></div>
-                      <div className="flex-grow min-w-0">
-                        <div className="flex items-center space-x-1 min-w-0">
-                          <div className="flex items-center space-x-1 truncate cursor-pointer" onClick={(e) => { e.stopPropagation(); openUserProfile(r.authorId); }}>
-                            <span className={`font-bold text-sm hover:underline flex items-center truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{r.authorName}{(VERIFIED_USERS || []).some(u => u.toLowerCase() === (r.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'admin' }); }} size={14} className="text-black fill-yellow-500 ml-1 flex-shrink-0 cursor-pointer" />}{(VETERAN_USERS || []).some(u => u.toLowerCase() === (r.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'veteran' }); }} size={14} className="text-black fill-blue-500 ml-1 flex-shrink-0 cursor-pointer" />}{(NAMING_USERS || []).some(u => u.toLowerCase() === (r.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'naming' }); }} size={14} className="text-black fill-pink-500 ml-1 flex-shrink-0 cursor-pointer" />}</span>
-                            <span className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-xs truncate max-w-[60px] sm:max-w-none`}>@{r.authorId}</span><span className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-xs whitespace-nowrap`}>· {formatTimeAgo(r.timestamp)}</span>
-                          </div>
-                          {r.authorId !== currentAccountId && <button onClick={(e) => toggleFollow(r.authorId, e)} className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors whitespace-nowrap flex-shrink-0 ${following[r.authorId] ? (isDark ? 'border-gray-600 text-white hover:border-red-500/50 hover:text-red-400 hover:bg-red-900/30 bg-transparent' : 'border-gray-300 text-gray-700 hover:border-red-500/50 hover:text-red-500 hover:bg-red-50 bg-transparent') : (isDark ? 'bg-white text-black border-white hover:bg-gray-200' : 'bg-gray-900 text-white border-gray-900 hover:bg-gray-800')}`}>{following[r.authorId] ? 'フォロー中' : 'フォロー'}</button>}
-                          {(r.authorId === currentAccountId || isAdmin) && <button onClick={async (e) => { e.stopPropagation(); if (window.confirm("この返信を削除しますか？")) { await updateDoc(doc(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts/${p.id}`), { [`replies.${replyId}`]: deleteField() }); } }} className={`ml-auto p-1 rounded-full flex-shrink-0 transition-colors ${isDark ? 'text-gray-500 hover:text-red-400 hover:bg-red-900/30' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}><Trash2 size={14} /></button>}
-                        </div>
-                        <p className={`text-sm break-words whitespace-pre-wrap mt-0.5 ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{renderTextWithLinks(r.content)}</p>
+                    <div
+                      key={emoji}
+                      className={`group relative flex items-center space-x-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-all duration-200 cursor-pointer ${
+                        hasReacted
+                          ? (isDark ? 'bg-blue-500/10 border-blue-500 text-blue-400 hover:bg-blue-500/20' : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100')
+                          : (isDark ? 'bg-gray-900 border-gray-800 text-gray-400 hover:bg-gray-800 hover:text-white' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-800')
+                      }`}
+                      onClick={() => toggleReaction(p, emoji)}
+                    >
+                      <span className="text-[13px]">{emoji}</span>
+                      <span className="text-[11px] font-bold">{userCount}</span>
+                      
+                      {/* ホバー時にリアクションしたユーザーをツールチップで表示 */}
+                      <div className={`absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:block z-30 whitespace-nowrap text-[10px] px-2 py-1 rounded-md shadow-lg pointer-events-none border animate-[fadeIn_0.1s_ease-out] ${
+                        isDark 
+                          ? 'bg-gray-950 text-white border-gray-800/50' 
+                          : 'bg-white text-gray-900 border-gray-200 shadow-gray-200/50'
+                      }`}>
+                        <span className="font-semibold">{userList.join(', ')}</span>
                       </div>
                     </div>
                   );
                 })}
-                <form onSubmit={e => handleReply(p.id, e)} className="flex space-x-3 mt-2 items-end">
-                  <Avatar src={currentUserProfile.avatarUrl} name={currentUserProfile.name} color={currentUserProfile.avatarColor} size="sm" />
+              </div>
+            )}
+
+            {/* アクションボタン: 返信 / リポスト / いいね / ブックマーク / Smile */}
+            <div className={`mt-3 flex items-center justify-between max-w-md ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              {/* 返信 */}
+              <div className="flex items-center space-x-1 hover:text-blue-500 transition-colors group" onClick={(e) => { e.stopPropagation(); setExpandedPostId(expandedPostId === p.id ? null : p.id); }}>
+                <div className={`p-2 rounded-full ${isDark ? 'group-hover:bg-blue-900/30' : 'group-hover:bg-blue-50'} transition-colors`}>
+                  <MessageCircle size={18} />
+                </div>
+                <span className="text-xs">{totalReplyCount || ''}</span>
+              </div>
+
+              {/* リポスト（メニュー付き） */}
+              <div className="relative">
+                <div 
+                  className={`flex items-center space-x-1 transition-colors group cursor-pointer ${hasReposted ? 'text-emerald-500' : 'hover:text-emerald-500'}`} 
+                  onClick={e => { e.stopPropagation(); setShowRepostMenu(!showRepostMenu); }}
+                >
+                  <div className={`p-2 rounded-full ${isDark ? 'group-hover:bg-emerald-900/30' : 'group-hover:bg-emerald-50'} transition-colors`}>
+                    <Repeat size={18} />
+                  </div>
+                  <span className="text-xs">{repostCount || ''}</span>
+                </div>
+                {showRepostMenu && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={(e) => { e.stopPropagation(); setShowRepostMenu(false); }} />
+                    <div 
+                      className={`absolute bottom-full mb-1 left-1/2 -translate-x-1/2 z-40 rounded-xl shadow-xl border p-1 w-32 ${
+                        isDark ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-800'
+                      }`} 
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <button 
+                        onClick={(e) => { toggleRepost(p, e); setShowRepostMenu(false); }} 
+                        className={`w-full text-left px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-2 ${
+                          isDark ? 'hover:bg-gray-800 text-white' : 'hover:bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        <Repeat size={14} />
+                        <span>{hasReposted ? '取消' : 'リポスト'}</span>
+                      </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setIsQuoteModalOpen(true); setShowRepostMenu(false); }} 
+                        className={`w-full text-left px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-2 ${
+                          isDark ? 'hover:bg-gray-800 text-white' : 'hover:bg-gray-100 text-gray-800'
+                        }`}
+                      >
+                        <Plus size={14} />
+                        <span>引用</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* いいね */}
+              <div className={`flex items-center space-x-1 transition-colors group ${isLiked ? 'text-pink-500' : 'hover:text-pink-500'}`} onClick={e => toggleLike(p, e)}>
+                <div className={`p-2 rounded-full ${isDark ? 'group-hover:bg-pink-900/30' : 'group-hover:bg-pink-50'} transition-colors`}>
+                  <Heart size={18} className={isLiked ? 'fill-current' : ''} />
+                </div>
+                <span className="text-xs">{likeCount || ''}</span>
+              </div>
+
+              {/* ブックマーク */}
+              <div className={`flex items-center space-x-1 transition-colors group ${isBookmarked ? 'text-blue-500' : 'hover:text-blue-500'}`} onClick={e => toggleBookmark(p, e)}>
+                <div className={`p-2 rounded-full ${isDark ? 'group-hover:bg-blue-900/30' : 'group-hover:bg-blue-50'} transition-colors`}>
+                  <Bookmark size={18} className={isBookmarked ? 'fill-current' : ''} />
+                </div>
+              </div>
+
+              {/* Smile リアクション */}
+              <div className="relative" ref={smileButtonRef}>
+                <div 
+                  className={`flex items-center space-x-1 transition-colors group cursor-pointer ${
+                    showEmojiPalette || showAllEmojiPicker ? 'text-blue-500' : 'hover:text-blue-500'
+                  }`} 
+                  onClick={handleOpenEmojiPalette}
+                >
+                  <div className={`p-2 rounded-full ${isDark ? 'group-hover:bg-blue-900/30' : 'group-hover:bg-blue-50'} transition-colors`}>
+                    <Smile size={18} />
+                  </div>
+                </div>
+
+                {/* 人気絵文字パレット (👍, 😂, 🎉, 🔥, 🚀, 🤔, 😭, 😮, 🙏, ＋) */}
+                {showEmojiPalette && (
+                  <div 
+                    className={`absolute z-40 flex items-center space-x-1 p-1.5 rounded-full shadow-xl border no-scrollbar overflow-x-auto max-w-[80vw] sm:max-w-none ${
+                      pickerDirection === 'down'
+                        ? 'top-full mt-2 right-0'
+                        : 'bottom-full mb-2 right-0'
+                    } ${
+                      isDark ? 'bg-gray-900 border-gray-800 text-white shadow-black/80' : 'bg-white border-gray-200 text-gray-850 shadow-gray-200/50'
+                    }`} 
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <style>{`
+                      .no-scrollbar::-webkit-scrollbar { display: none; }
+                      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+                    `}</style>
+                    {['👍', '😂', '🎉', '🔥', '🚀', '🤔', '😭', '😮', '🙏'].map(emoji => {
+                      const hasReacted = p.reactions && p.reactions[emoji] && p.reactions[emoji][currentAccountId];
+                      return (
+                        <button
+                          key={emoji}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleReaction(p, emoji);
+                            setShowEmojiPalette(false);
+                          }}
+                          className={`text-[17px] p-1.5 rounded-full transition-all duration-150 hover:scale-125 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center flex-shrink-0 ${
+                            hasReacted ? (isDark ? 'bg-blue-900/50' : 'bg-blue-50') : ''
+                          }`}
+                        >
+                          {emoji}
+                        </button>
+                      );
+                    })}
+                    <button
+                      onClick={handleOpenAllEmojiPicker}
+                      className="text-[17px] p-1.5 rounded-full transition-all duration-150 hover:scale-125 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-center text-blue-500 flex-shrink-0"
+                      title="すべての絵文字"
+                    >
+                      <Plus size={18} />
+                    </button>
+                  </div>
+                )}
+
+                {/* 全絵文字ピッカー（絶対配置、ポップオーバー吹き出し形式） */}
+                {showAllEmojiPicker && (
+                  <div 
+                    className={`absolute z-45 w-[300px] h-[310px] shadow-2xl rounded-2xl overflow-hidden border flex flex-col ${
+                      pickerDirection === 'down' 
+                        ? 'top-full mt-2 right-0' 
+                        : 'bottom-full mb-2 right-0'
+                    } ${isDark ? 'bg-gray-900 border-gray-800 text-white shadow-black/80' : 'bg-white border-gray-200 text-gray-950 shadow-gray-200/50'}`}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <style>{`
+                      .epr-category-nav { display: none !important; }
+                      .epr-header { display: none !important; }
+                    `}</style>
+                    <div className="flex-grow h-[310px] overflow-hidden relative">
+                      <Suspense fallback={
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Loader2 className="animate-spin text-blue-500" size={24} />
+                        </div>
+                      }>
+                        <EmojiPicker
+                          theme={isDark ? 'dark' : 'light'}
+                          onEmojiClick={(emojiData) => {
+                            toggleReaction(p, emojiData.emoji);
+                            setShowAllEmojiPicker(false);
+                          }}
+                          autoFocusSearch={false}
+                          searchDisabled={true}
+                          skinTonesDisabled={true}
+                          previewConfig={{ showPreview: false }}
+                          categories={[
+                            { category: 'suggested', name: 'よく使う絵文字' },
+                            { category: 'smileys_people', name: '顔と人' },
+                            { category: 'animals_nature', name: '動物と自然' },
+                            { category: 'food_drink', name: '食べ物と飲み物' },
+                            { category: 'travel_places', name: '旅行と場所' },
+                            { category: 'activities', name: 'アクティビティ' },
+                            { category: 'objects', name: '物' },
+                            { category: 'symbols', name: '記号' },
+                            { category: 'flags', name: '旗' }
+                          ]}
+                          height="100%"
+                          width="100%"
+                        />
+                      </Suspense>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            {likeCount > 0 && <div className={`mt-2.5 text-[13px] flex items-start p-2.5 rounded-xl border w-fit max-w-full ${isDark ? 'text-gray-400 bg-gray-900 border-gray-800' : 'text-gray-600 bg-gray-50 border-gray-150'}`}><Heart size={14} className="mr-1.5 mt-0.5 flex-shrink-0 fill-pink-500 text-pink-500" /><span className="font-medium leading-relaxed break-words">{likeNames.join(', ')} がいいねしました</span></div>}
+
+            {/* 展開時の返信リスト（PostItemの再帰呼び出しで一貫描画） */}
+            {expandedPostId === p.id && (
+              <div className={`mt-4 border-t pt-4 ${isDark ? 'border-gray-800' : 'border-gray-150'}`} onClick={e => e.stopPropagation()}>
+                {allRepliesList.length > 0 && (
+                  <div className="mt-2 ml-[-68px] -mr-4">
+                    {allRepliesList.map((reply) => (
+                      <PostItem
+                        key={reply.id}
+                        p={reply}
+                        firestore={firestore}
+                        currentRoomId={currentRoomId}
+                        currentAccountId={currentAccountId}
+                        currentUserProfile={currentUserProfile}
+                        isAdmin={isAdmin}
+                        following={following}
+                        userBookmarks={userBookmarks}
+                        expandedPostId={expandedPostId}
+                        setExpandedPostId={setExpandedPostId}
+                        toggleFollow={toggleFollow}
+                        openUserProfile={openUserProfile}
+                        formatTimeAgo={formatTimeAgo}
+                        sanitizeRoomId={sanitizeRoomId}
+                        VERIFIED_USERS={VERIFIED_USERS}
+                        VETERAN_USERS={VETERAN_USERS}
+                        NAMING_USERS={NAMING_USERS}
+                        setBadgeModal={setBadgeModal}
+                        Avatar={Avatar}
+                        isDark={isDark}
+                        allPosts={allPosts}
+                        onNavigateToPost={onNavigateToPost}
+                        isReplyThreadItem={true}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* 返信ポスト入力フォーム */}
+                <form onSubmit={e => handleReply(p.id, e)} className="flex space-x-3 mt-4 items-end ml-[-52px]">
+                  <Avatar src={currentUserProfile.avatarUrl} name={currentUserProfile.name} color={currentUserProfile.avatarColor} size="md" />
                   <textarea
                     placeholder="返信をポスト"
                     value={replyContent}
@@ -170,12 +693,62 @@ export const PostItem = ({
                     rows={1}
                     className={`flex-grow bg-transparent py-2 text-sm outline-none placeholder-gray-500 resize-none min-h-[38px] max-h-28 overflow-y-auto leading-5 ${isDark ? 'text-white' : 'text-gray-900'}`}
                   />
-                  <button type="submit" disabled={!replyContent.trim()} className={`font-bold text-sm px-3 py-1.5 rounded-full text-blue-500 ${isDark ? 'hover:bg-blue-900/20' : 'hover:bg-blue-50'} disabled:opacity-50 transition-colors`}>返信</button>
+                  <button type="submit" disabled={!replyContent.trim() || isReplying} className={`font-bold text-sm px-3 py-1.5 rounded-full text-blue-500 ${isDark ? 'hover:bg-blue-900/20' : 'hover:bg-blue-50'} disabled:opacity-50 transition-colors flex items-center`}>
+                    {isReplying && <Loader2 size={12} className="animate-spin mr-1" />}
+                    返信
+                  </button>
                 </form>
               </div>
             )}
           </div>
         </div>
+
+        {/* 引用リポスト入力モーダル */}
+        {isQuoteModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={(e) => { e.stopPropagation(); setIsQuoteModalOpen(false); }}>
+            <div className={`w-full max-w-lg rounded-3xl p-5 shadow-2xl animate-[fadeIn_0.2s_ease-out] ${isDark ? 'bg-black border border-gray-800 text-white' : 'bg-white border border-gray-200 text-gray-950'}`} onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-200 dark:border-gray-800">
+                <h3 className="font-bold text-lg">引用ポスト</h3>
+                <button onClick={() => setIsQuoteModalOpen(false)} className={`p-1.5 rounded-full transition-colors ${isDark ? 'hover:bg-gray-800 text-white' : 'hover:bg-gray-100 text-gray-800'}`}>
+                  <Plus size={18} className="rotate-45" />
+                </button>
+              </div>
+              
+              <form onSubmit={handleQuoteRepost} className="space-y-4">
+                <textarea
+                  placeholder="コメントを追加"
+                  value={quoteComment}
+                  onChange={e => setQuoteComment(e.target.value)}
+                  rows={3}
+                  className={`w-full bg-transparent resize-none outline-none text-base leading-relaxed ${isDark ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
+                  autoFocus
+                />
+                
+                {/* 引用対象のプレビューカード */}
+                <div className={`border rounded-2xl p-3 select-none ${isDark ? 'border-[#2f3336] bg-gray-950/20' : 'border-[#cfd9de] bg-gray-50/20'}`}>
+                  <div className="flex items-center space-x-1.5 truncate">
+                    <Avatar src={authorAvatarUrl} name={authorName} color={authorColor} size="xs" />
+                    <span className={`font-bold text-[14px] truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{authorName}</span>
+                    <span className={`text-[13px] ${isDark ? 'text-gray-500' : 'text-gray-500'} truncate`}>@{p.authorId}</span>
+                    <span className={`text-[13px] ${isDark ? 'text-gray-500' : 'text-gray-500'} whitespace-nowrap`}>· {formatTimeAgo(p.timestamp)}</span>
+                  </div>
+                  <p className={`mt-1.5 text-[14px] leading-normal break-words whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{p.content}</p>
+                </div>
+                
+                <div className="flex justify-end pt-2">
+                  <button 
+                    type="submit" 
+                    disabled={!quoteComment.trim() || isPostingQuote} 
+                    className="bg-blue-600 text-white keep-white px-5 py-1.5 rounded-full font-bold disabled:opacity-50 hover:bg-blue-700 transition-colors flex items-center text-sm"
+                  >
+                    {isPostingQuote && <Loader2 size={14} className="animate-spin mr-1.5" />}
+                    ポストする
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   } catch (e) { return null; }
@@ -189,7 +762,7 @@ export default function CommunityComponent({
   activeTab, setActiveTab, viewingUserProfile, viewingProfileId,
   viewingFollowers, viewingFollowing, visiblePosts, isLoading,
   postLimit, setPostLimit, displayedPosts, profilePosts = [], setIsRoomModalOpen, ensureRoomListed, Avatar,
-  isDark
+  isDark, allPosts
 }) {
   const [newPostContent, setNewPostContent] = useState('');
   const [showPoll, setShowPoll] = useState(false);
@@ -212,8 +785,11 @@ export default function CommunityComponent({
         if (durationMins < 5 || durationMins > 7 * 24 * 60) { alert("投票期間は5分〜7日で設定してください。"); setIsPosting(false); return; }
         pollData = { choices: validChoices, expiresAt: Date.now() + (durationMins * 60 * 1000), votedUsers: {} };
       }
-      await addDoc(collection(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts`), {
+      addDoc(collection(firestore, `rooms/${sanitizeRoomId(currentRoomId)}/posts`), {
         authorId: currentAccountId, authorName: currentUserProfile.name, authorHandle: currentUserProfile.handle, authorColor: currentUserProfile.avatarColor, authorAvatarUrl: currentUserProfile.avatarUrl || null, content: newPostContent, poll: pollData, timestamp: Date.now()
+      }).catch(err => {
+        alert("投稿に失敗しました。");
+        console.error(err);
       });
       ensureRoomListed?.();
       setNewPostContent(''); setShowPoll(false); setPollChoices(['', '']); setPollDays(1); setPollHours(0); setPollMinutes(0);
@@ -241,40 +817,52 @@ export default function CommunityComponent({
         </div>
       </div>
 
-      {activeTab === 'プロフィール' && viewingUserProfile && viewingProfileId !== currentAccountId && (
-        <>
-          <div className={`border-b pb-4 ${isDark ? 'border-gray-800' : 'border-gray-150'}`}>
-            <div className="flex items-center space-x-6 px-4 py-2"><button onClick={() => setActiveTab('おすすめ')} className={`p-2 -ml-2 rounded-full transition-colors ${isDark ? 'hover:bg-gray-900 text-white' : 'hover:bg-gray-100 text-gray-700'}`}><ArrowLeft size={20} /></button><div><h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{viewingUserProfile.name}</h2></div></div>
-            <div className={`h-32 ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>{viewingUserProfile.headerUrl && <img src={viewingUserProfile.headerUrl} className="w-full h-full object-cover" alt="header" />}</div>
-            <div className="px-4 relative -mt-12">
-              <div className="flex justify-between items-end mb-3">
-                <Avatar src={viewingUserProfile.avatarUrl} color={viewingUserProfile.avatarColor} name={viewingUserProfile.name} size="lg" />
-                <button onClick={() => toggleFollow(viewingProfileId)} className={`px-4 py-1.5 rounded-full font-bold border transition-colors ${following[viewingProfileId] ? (isDark ? 'border-gray-600 text-white hover:border-red-500/50 hover:text-red-400 hover:bg-red-900/30 bg-transparent' : 'border-gray-300 text-gray-700 hover:border-red-500/50 hover:text-red-500 hover:bg-red-50 bg-transparent') : (isDark ? 'bg-white text-black border-white hover:bg-gray-200' : 'bg-gray-900 text-white border-gray-900 hover:bg-gray-800')}`}>{following[viewingProfileId] ? 'フォロー中' : 'フォロー'}</button>
-              </div>
-              <div>
-                <h2 className={`text-xl font-extrabold flex items-center ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  {viewingUserProfile.name}
-                  {(VERIFIED_USERS || []).some(u => u.toLowerCase() === (viewingUserProfile.id || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'admin' }); }} size={18} className="text-black fill-yellow-500 ml-1 cursor-pointer" />}
-                  {(VETERAN_USERS || []).some(u => u.toLowerCase() === (viewingUserProfile.id || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'veteran' }); }} size={18} className="text-black fill-blue-500 ml-1 cursor-pointer" />}
-                  {(NAMING_USERS || []).some(u => u.toLowerCase() === (viewingUserProfile.id || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'naming' }); }} size={18} className="text-black fill-pink-500 ml-1 cursor-pointer" />}
-                </h2>
-                <p className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-sm mb-3`}>@{viewingUserProfile.id}</p>
-              </div>
-              <p className={`text-[15px] leading-normal whitespace-pre-wrap mb-3 ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{viewingUserProfile.bio}</p>
-              <div className={`flex space-x-4 text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                <div className={`cursor-pointer hover:underline ${isDark ? 'text-gray-400' : 'text-gray-500'}`} onClick={() => openFollowList('フォロー中', viewingFollowing)}><span className={`font-bold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{Object.keys(viewingFollowing).length}</span>フォロー中</div>
-                <div className={`cursor-pointer hover:underline ${isDark ? 'text-gray-400' : 'text-gray-500'}`} onClick={() => openFollowList('フォロワー', viewingFollowers)}><span className={`font-bold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{Object.keys(viewingFollowers).length}</span>フォロワー</div>
+      {activeTab === 'プロフィール' && viewingProfileId !== currentAccountId && (
+        (!viewingUserProfile || viewingUserProfile.id !== viewingProfileId) ? (
+          <div className="flex flex-col items-center justify-center py-24">
+            <Loader2 className="animate-spin text-blue-500" size={32} />
+          </div>
+        ) : (
+          <>
+            <div className={`border-b pb-4 ${isDark ? 'border-gray-800' : 'border-gray-150'}`}>
+              <div className="flex items-center space-x-6 px-4 py-2"><button onClick={() => setActiveTab('おすすめ')} className={`p-2 -ml-2 rounded-full transition-colors ${isDark ? 'hover:bg-gray-900 text-white' : 'hover:bg-gray-100 text-gray-700'}`}><ArrowLeft size={20} /></button><div><h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>{viewingUserProfile.name}</h2></div></div>
+              <div className={`h-32 ${isDark ? 'bg-gray-800' : 'bg-gray-200'}`}>{viewingUserProfile.headerUrl && <img src={viewingUserProfile.headerUrl} className="w-full h-full object-cover" alt="header" />}</div>
+              <div className="px-4 relative -mt-12">
+                <div className="flex justify-between items-end mb-3">
+                  <Avatar src={viewingUserProfile.avatarUrl} color={viewingUserProfile.avatarColor} name={viewingUserProfile.name} size="lg" />
+                  <button onClick={() => toggleFollow(viewingProfileId)} className={`px-4 py-1.5 rounded-full font-bold border transition-colors ${following[viewingProfileId] ? (isDark ? 'border-gray-600 text-white hover:border-red-500/50 hover:text-red-400 hover:bg-red-900/30 bg-transparent' : 'border-gray-300 text-gray-700 hover:border-red-500/50 hover:text-red-500 hover:bg-red-50 bg-transparent') : (isDark ? 'bg-white text-black border-white hover:bg-gray-200' : 'bg-gray-900 text-white border-gray-900 hover:bg-gray-800')}`}>{following[viewingProfileId] ? 'フォロー中' : 'フォロー'}</button>
+                </div>
+                <div>
+                  <h2 className={`text-xl font-extrabold flex items-center ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    {viewingUserProfile.name}
+                    {(VERIFIED_USERS || []).some(u => u.toLowerCase() === (viewingUserProfile.id || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'admin' }); }} size={18} className="text-black fill-yellow-500 ml-1 cursor-pointer" />}
+                    {(VETERAN_USERS || []).some(u => u.toLowerCase() === (viewingUserProfile.id || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'veteran' }); }} size={18} className="text-black fill-blue-500 ml-1 cursor-pointer" />}
+                    {(NAMING_USERS || []).some(u => u.toLowerCase() === (viewingUserProfile.id || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'naming' }); }} size={18} className="text-black fill-pink-500 ml-1 cursor-pointer" />}
+                  </h2>
+                  <p className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-sm mb-3`}>@{viewingUserProfile.id}</p>
+                </div>
+                <p className={`text-[15px] leading-normal whitespace-pre-wrap mb-3 ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{viewingUserProfile.bio}</p>
+                <div className={`flex space-x-4 text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <div className={`cursor-pointer hover:underline ${isDark ? 'text-gray-400' : 'text-gray-500'}`} onClick={() => openFollowList('フォロー中', viewingFollowing)}><span className={`font-bold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{Object.keys(viewingFollowing).length}</span>フォロー中</div>
+                  <div className={`cursor-pointer hover:underline ${isDark ? 'text-gray-400' : 'text-gray-500'}`} onClick={() => openFollowList('フォロワー', viewingFollowers)}><span className={`font-bold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{Object.keys(viewingFollowers).length}</span>フォロワー</div>
+                </div>
               </div>
             </div>
-          </div>
-          <div className={`border-t mt-2 ${isDark ? 'border-gray-800' : 'border-gray-150'}`}>
-            {(() => {
-              const userPosts = profilePosts;
-              if (userPosts.length === 0) return <div className={`p-10 text-center font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>ポストがありません</div>;
-              return userPosts.map(p => <PostItem key={p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={VERIFIED_USERS} VETERAN_USERS={VETERAN_USERS} NAMING_USERS={NAMING_USERS} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} />);
-            })()}
-          </div>
-        </>
+            <div className={`border-t mt-2 ${isDark ? 'border-gray-800' : 'border-gray-150'}`}>
+              {(() => {
+                const userPosts = profilePosts;
+                if (userPosts.length === 0) return <div className={`p-10 text-center font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>ポストがありません</div>;
+                return userPosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={VERIFIED_USERS} VETERAN_USERS={VETERAN_USERS} NAMING_USERS={NAMING_USERS} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={allPosts} onNavigateToPost={(id) => {
+                  setExpandedPostId(id);
+                  setTimeout(() => {
+                    const el = document.getElementById(`post-${id}`);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }, 100);
+                }} />);
+              })()}
+            </div>
+          </>
+        )
       )}
 
       {activeTab === 'おすすめ' && (
@@ -319,7 +907,13 @@ export default function CommunityComponent({
       {activeTab !== 'プロフィール' && (
       <div>
         {visiblePosts.length === 0 && !isLoading && <div className={`p-10 text-center font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>表示できるポストがありません</div>}
-        {visiblePosts.map(p => <PostItem key={p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={VERIFIED_USERS} VETERAN_USERS={VETERAN_USERS} NAMING_USERS={NAMING_USERS} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} />)}
+        {visiblePosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={VERIFIED_USERS} VETERAN_USERS={VETERAN_USERS} NAMING_USERS={NAMING_USERS} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={allPosts} onNavigateToPost={(id) => {
+          setExpandedPostId(id);
+          setTimeout(() => {
+            const el = document.getElementById(`post-${id}`);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 100);
+        }} />)}
         {activeTab === 'おすすめ' && displayedPosts.length > postLimit && (
           <div className={`p-4 text-center border-b ${isDark ? 'border-gray-800' : 'border-gray-150'}`}>
             <button onClick={() => setPostLimit(prev => prev + 15)} className={`font-bold py-2.5 px-6 rounded-full transition-colors text-sm border ${isDark ? 'bg-gray-900 hover:bg-gray-800 text-gray-300 border-gray-800' : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'}`}>
