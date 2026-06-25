@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { collection, addDoc, onSnapshot, doc, setDoc } from 'firebase/firestore';
-import { Calendar, Plus, CheckCircle, UploadCloud, MapPin, X, MessageSquare, Send } from 'lucide-react';
+import { Calendar, Plus, CheckCircle, UploadCloud, MapPin, X, MessageSquare, Send, Users, Globe, Download, Upload } from 'lucide-react';
 import { LESSON_COLORS, getLessonColor, parseCSV, sanitizeRoomId } from './utils';
 
 export default function TimetableComponent({
@@ -24,6 +24,29 @@ export default function TimetableComponent({
   const lessonTalkEndRef = useRef(null);
   const csvInputRef = useRef(null);
   const [syllabusDict, setSyllabusDict] = useState({});
+
+  const [activeSubTab, setActiveSubTab] = useState(0);
+  const containerRef = useRef(null);
+
+  const handleScroll = () => {
+    if (!containerRef.current) return;
+    const { scrollLeft, clientWidth } = containerRef.current;
+    if (clientWidth === 0) return;
+    const newIndex = Math.round(scrollLeft / clientWidth);
+    if (newIndex !== activeSubTab && newIndex >= 0 && newIndex < 3) {
+      setActiveSubTab(newIndex);
+    }
+  };
+
+  const scrollToTab = (index) => {
+    if (!containerRef.current) return;
+    const { clientWidth } = containerRef.current;
+    containerRef.current.scrollTo({
+      left: index * clientWidth,
+      behavior: 'smooth'
+    });
+    setActiveSubTab(index);
+  };
 
   // 外部（カレンダー等）から講義選択されてジャンプしてきた場合の処理
   useEffect(() => {
@@ -199,6 +222,64 @@ export default function TimetableComponent({
         });
       })
       .then(({ text, data }) => {
+        // 簡易CSVフォーマット (ターム,曜日,時限,...) の検出と処理
+        if (data[0] && data[0][0] && (data[0][0].includes('ターム') || data[0][0].includes('曜日'))) {
+          let detectedTerm = selectedTermTab;
+          let timetable = {};
+          let intensiveLessons = [];
+
+          data.slice(1).forEach(row => {
+            if (row.length < 4) return;
+            const term = row[0]?.trim();
+            const day = row[1]?.trim();
+            const periodStr = row[2]?.trim();
+            const name = row[3]?.trim();
+            const room = row[4]?.trim();
+            const teacher = row[5]?.trim();
+            const credit = row[6]?.trim();
+            const code = row[7]?.trim();
+
+            if (!name) return;
+            if (term) detectedTerm = term;
+
+            const isIntensive = periodStr?.includes('集中') || day === '他' || periodStr === 'その他';
+            const period = periodStr?.replace('限', '');
+
+            const lesson = {
+              day,
+              period,
+              name,
+              room,
+              teacher,
+              credit,
+              code,
+              isIntensive
+            };
+
+            if (isIntensive) {
+              intensiveLessons.push(lesson);
+            } else {
+              if (period) {
+                if (!timetable[period]) timetable[period] = {};
+                timetable[period][day] = lesson;
+              }
+            }
+          });
+
+          if (intensiveLessons.length > 0) {
+            timetable.intensive = intensiveLessons;
+          }
+
+          const newTimetables = { ...timetables, [detectedTerm]: timetable };
+          setTimetables(newTimetables);
+          localStorage.setItem('twitter_clone_timetables', JSON.stringify(newTimetables));
+          if (setTimetableData) {
+            setTimetableData(newTimetables);
+          }
+          showToast(`✅ ${detectedTerm} の時間割を読み込みました`);
+          return;
+        }
+
         let detectedTerm = null;
         if (text.includes('第1ターム')) detectedTerm = '第1ターム';
         else if (text.includes('第2ターム')) detectedTerm = '第2ターム';
@@ -357,6 +438,68 @@ export default function TimetableComponent({
       });
   };
 
+  const handleCsvExport = async () => {
+    const currentTimetable = timetables[selectedTermTab];
+    if (!currentTimetable) {
+      showToast("❌ エクスポートするデータがありません");
+      return;
+    }
+
+    // CSVヘッダー (BOM付き UTF-8)
+    let csvContent = "\uFEFF";
+    csvContent += "ターム,曜日,時限,講義名,教室,担当教員,単位数,コード\n";
+
+    const days = ['月', '火', '水', '木', '金'];
+    const periods = [1, 2, 3, 4, 5];
+
+    // 通常の講義
+    periods.forEach(period => {
+      days.forEach(day => {
+        const lesson = currentTimetable[period]?.[day];
+        if (lesson && lesson.name) {
+          csvContent += `"${selectedTermTab}","${day}","${period}限","${lesson.name}","${lesson.room || ''}","${lesson.teacher || ''}","${lesson.credit || ''}","${lesson.code || ''}"\n`;
+        }
+      });
+    });
+
+    // 集中講義
+    if (currentTimetable.intensive && Array.isArray(currentTimetable.intensive)) {
+      currentTimetable.intensive.forEach(lesson => {
+        csvContent += `"${selectedTermTab}","${lesson.day || '他'}","${lesson.period || 'その他'}","${lesson.name}","${lesson.room || ''}","${lesson.teacher || ''}","${lesson.credit || ''}","${lesson.code || ''}"\n`;
+      });
+    }
+
+    const fileName = `${selectedTermTab}_時間割.csv`;
+
+    try {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const file = new File([blob], fileName, { type: 'text/csv' });
+      
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `${selectedTermTab}の時間割`,
+          text: `${selectedTermTab}の時間割データです。`
+        });
+        showToast("✅ 時間割を共有しました");
+      } else {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", fileName);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast("✅ 時間割をCSVとしてエクスポートしました");
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        showToast("❌ エクスポートに失敗しました");
+        console.error(e);
+      }
+    }
+  };
+
   const PERIOD_TIMES = {
     1: "9:00\n10:30",
     2: "10:40\n12:10",
@@ -453,146 +596,260 @@ export default function TimetableComponent({
 
   return (
     <>
-      <div className="pb-4 max-w-6xl mx-auto w-full flex flex-col lg:ml-0" style={{ minHeight: 'calc(100vh - 60px)' }}>
-        <div className="flex justify-between items-center mb-4 px-4 sm:px-6 lg:px-8 flex-shrink-0">
-          <h2 className="text-2xl font-extrabold text-white flex items-center">
-            <Calendar size={24} className="mr-2 text-blue-500" /> MY時間割
-          </h2>
-          <button onClick={() => csvInputRef.current.click()} className="text-xs bg-blue-900/40 text-blue-400 hover:bg-blue-900/60 px-3 py-1.5 rounded-lg font-bold transition-colors shadow-sm flex items-center">
-            <Plus size={14} className="mr-1" /> 追加・更新
-          </button>
-          <input type="file" accept=".csv" className="hidden" ref={csvInputRef} onChange={handleCsvUpload} />
+      {/* ⚠️ サブナビゲーション用のタブバー（スワイプ切り替え用） */}
+      <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-2 mb-4 flex-shrink-0">
+        <div className={`border p-1.5 flex justify-around items-center max-w-md mx-auto rounded-2xl ${
+          isDark 
+            ? 'bg-gray-900/80 border-gray-800 shadow-[0_4px_20px_rgba(0,0,0,0.4)]' 
+            : 'bg-white border-gray-200 shadow-sm'
+        }`}>
+          {[
+            { id: 0, label: 'MY時間割', icon: Calendar },
+            { id: 1, label: '友達の時間割', icon: Users },
+            { id: 2, label: '埼大住民', icon: Globe }
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeSubTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => scrollToTab(tab.id)}
+                className="flex-1 flex flex-col items-center justify-center py-2 px-1 relative transition-colors"
+              >
+                <Icon size={20} className={isActive ? (isDark ? "text-white" : "text-blue-600") : "text-gray-500"} />
+                <span className={`text-[11px] sm:text-xs mt-1 font-extrabold transition-colors ${
+                  isActive ? (isDark ? "text-white" : "text-blue-600") : "text-gray-500"
+                }`}>
+                  {tab.label}
+                </span>
+                {isActive && (
+                  <div className={`absolute bottom-0 left-[20%] right-[20%] h-[3px] rounded-full transition-all duration-300 ${
+                    isDark ? 'bg-white' : 'bg-blue-600'
+                  }`} />
+                )}
+              </button>
+            );
+          })}
         </div>
-
-
-
-        <div className={`flex ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'} p-1 rounded-xl mb-4 shadow-inner overflow-x-auto whitespace-nowrap mx-4 sm:mx-6 lg:mx-8 flex-shrink-0 border`} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-          {['第1ターム', '第2ターム', '第3ターム', '第4ターム'].map(term => (
-            <button
-              key={term}
-              onClick={() => setSelectedTermTab(term)}
-              className={`flex-1 min-w-[80px] py-2 px-1 text-xs sm:text-sm font-bold rounded-lg transition-all duration-200 flex items-center justify-center ${selectedTermTab === term ? `${isDark ? 'bg-gray-800 text-blue-400 shadow-sm' : 'bg-blue-50 text-blue-700 shadow-sm'}` : `${isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}`}
-            >
-              {term}
-              {timetables[term] && <CheckCircle size={12} className={`ml-1 flex-shrink-0 ${isDark ? 'text-green-400' : 'text-green-600'}`} />}
-            </button>
-          ))}
-        </div>
-
-        {!timetables[selectedTermTab] ? (
-          <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-8 text-center shadow-sm mt-8 mx-4 sm:mx-6 lg:mx-8">
-            <div className="bg-blue-900/30 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <UploadCloud size={32} className="text-blue-400" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-2">{selectedTermTab} のデータを読み込む</h3>
-            <p className="text-sm text-gray-400 mb-6 leading-relaxed">
-              大学の履修登録状況照会からダウンロードした<br />「{selectedTermTab}のテキストファイル」を選択してください。<br />
-              <span className="text-xs text-blue-400 font-semibold mt-2 inline-block bg-blue-900/30 px-2 py-1 rounded">※データはアカウントに安全に同期されます。</span>
-            </p>
-            <button onClick={() => csvInputRef.current.click()} className="bg-blue-600 hover:bg-blue-700 text-white keep-white font-bold py-3 px-6 rounded-full transition-colors shadow-md active:scale-95 w-full max-w-xs">
-              ファイルを選択する
-            </button>
-          </div>
-        ) : (() => {
-          const currentTimetable = timetables[selectedTermTab];
-          const periods = [1, 2, 3, 4, 5];
-          const activeDays = ['月', '火', '水', '木', '金'];
-
-          return (
-            <div className={`${isDark ? 'bg-gray-900 text-white' : 'bg-white text-slate-900'} sm:rounded-2xl shadow-md border-y sm:border overflow-hidden w-full flex flex-col flex-grow ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-              <div style={{ gridTemplateColumns: `48px repeat(5, minmax(0, 1fr))` }} className={`grid border-b ${isDark ? 'border-gray-800 bg-gray-800' : 'border-gray-200 bg-gray-50'} flex-shrink-0`}>
-                <div className={`p-2 border-r ${isDark ? 'border-gray-800' : 'border-gray-200'}`}></div>
-                {activeDays.map(day => (
-                  <div key={day} className={`py-2 text-center text-[11px] sm:text-xs font-extrabold ${isDark ? 'text-gray-300 border-r border-gray-800' : 'text-slate-600 border-r border-gray-200'} last:border-r-0`}>{day}</div>
-                ))}
-              </div>
-              <div className={`flex flex-col ${isDark ? 'bg-gray-900/80' : 'bg-white'} flex-grow`}>
-                {periods.map((period, index) => (
-                  <div key={period} style={{ gridTemplateColumns: `48px repeat(5, minmax(0, 1fr))` }} className={`grid flex-grow min-h-[95px] sm:min-h-[125px] ${index !== periods.length - 1 ? `border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}` : ''}`}>
-                    <div className={`p-1 flex flex-col items-center justify-center border-r ${isDark ? 'border-gray-800 bg-gray-800/50' : 'border-gray-200 bg-gray-50'} ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>
-                      <span className={`text-base sm:text-lg font-black ${isDark ? 'text-gray-200' : 'text-slate-900'}`}>{period}</span>
-                      <span className={`text-[8px] sm:text-[10px] font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'} whitespace-pre text-center mt-1 leading-tight`}>{PERIOD_TIMES[period]}</span>
-                    </div>
-                    {activeDays.map(day => {
-                      const lesson = currentTimetable[period]?.[day];
-                      return (
-                        <div key={day}
-                          onClick={() => {
-                            if (lesson) {
-                              setSelectedLesson(lesson);
-                              setLessonModalTab('talk');
-                            }
-                          }}
-                          className={`p-1 sm:p-1.5 border-r ${isDark ? 'border-gray-800' : 'border-gray-200'} last:border-r-0 transition-all flex flex-col ${lesson ? `cursor-pointer ${isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}` : `${isDark ? 'bg-gray-950' : 'bg-white'}`}`}>
-                          {lesson && (() => {
-                            const color = getLessonColor(lesson.name, lessonColors);
-                            return (
-                              <div className={`flex-grow w-full ${color.bg} rounded-lg sm:rounded-xl shadow-sm border ${color.border} p-1.5 sm:p-2.5 flex flex-col justify-start hover:shadow-md ${color.hoverBorder} transition-all overflow-hidden relative group`}>
-                                <span className={`text-[11px] sm:text-[14px] font-extrabold ${color.text} leading-snug line-clamp-4 break-words`}>{lesson.name}</span>
-                                <div className="mt-auto pt-1.5">
-                                  <div className={`text-[9px] sm:text-[11.5px] ${color.text} opacity-90 flex items-start font-bold leading-tight`}>
-                                    <MapPin size={10} className={`mr-0.5 sm:mr-1 sm:w-3.5 sm:h-3.5 flex-shrink-0 mt-[2px] ${color.text === 'text-white keep-white' ? 'text-white keep-white' : 'text-gray-400'}`} />
-                                    <span className="line-clamp-2 break-words">{lesson.room || '教室未設定'}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
-
-        {timetables[selectedTermTab] && timetables[selectedTermTab].intensive && timetables[selectedTermTab].intensive.length > 0 && (
-          <div className="mt-6 mx-4 sm:mx-6 lg:mx-8">
-            <h3 className="text-lg font-extrabold text-white mb-3 flex items-center">
-              <Plus size={18} className="mr-1.5 text-blue-400" /> 集中講義・その他
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {timetables[selectedTermTab].intensive.map((lesson, idx) => {
-                const color = getLessonColor(lesson.name, lessonColors);
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => {
-                      setSelectedLesson(lesson);
-                      setLessonModalTab('talk');
-                    }}
-                    className={`p-3.5 rounded-xl cursor-pointer shadow-sm border transition-all hover:scale-[1.01] active:scale-98 flex flex-col justify-between ${color.bg} ${color.border} ${color.hoverBorder} ${isDark ? 'text-white' : 'text-slate-900'}`}
-                  >
-                    <div>
-                      <div className="flex justify-between items-start mb-1.5">
-                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isDark ? 'bg-black/30 text-gray-300' : 'bg-white/50 text-slate-700'}`}>
-                          {lesson.period}
-                        </span>
-                        <span className={`text-[9px] font-bold ${color.text} opacity-80`}>
-                          {lesson.credit}
-                        </span>
-                      </div>
-                      <h4 className="text-sm font-extrabold leading-snug line-clamp-2 break-all">{lesson.name}</h4>
-                    </div>
-                    <div className="mt-3 pt-2 border-t border-white/10 flex flex-col gap-1">
-                      <div className={`text-[10px] ${color.text} opacity-90 flex items-center font-bold`}>
-                        <MapPin size={10} className="mr-1 flex-shrink-0" />
-                        <span className="truncate">{lesson.room || '教室未設定'}</span>
-                      </div>
-                      <div className={`text-[10px] ${color.text} opacity-75 flex items-center`}>
-                        <span className="truncate">担当: {lesson.teacher || '未設定'}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
+      {/* ⚠️ スワイプ可能なコンテナ */}
+      <div 
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar w-full flex-grow"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        {/* 1. MY時間割 */}
+        <div className="w-full shrink-0 snap-start snap-always">
+          <div className="pb-4 max-w-6xl mx-auto w-full flex flex-col lg:ml-0" style={{ minHeight: 'calc(100vh - 120px)' }}>
+            <div className="flex items-center justify-between mb-4 mx-4 sm:mx-6 lg:mx-8 flex-shrink-0 gap-3">
+              <div className={`flex-grow flex ${isDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'} p-1 rounded-xl shadow-inner overflow-x-auto whitespace-nowrap border`} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                {['第1', '第2', '第3', '第4'].map((termText, idx) => {
+                  const termFull = `第${idx + 1}ターム`;
+                  return (
+                    <button
+                      key={termFull}
+                      onClick={() => setSelectedTermTab(termFull)}
+                      className={`flex-1 min-w-[50px] py-2 px-1 text-xs sm:text-sm font-bold rounded-lg transition-all duration-200 flex items-center justify-center ${selectedTermTab === termFull ? `${isDark ? 'bg-gray-800 text-blue-400 shadow-sm' : 'bg-blue-50 text-blue-700 shadow-sm'}` : `${isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'}`}`}
+                    >
+                      {termText}
+                      {timetables[termFull] && <CheckCircle size={12} className={`ml-1 flex-shrink-0 ${isDark ? 'text-green-400' : 'text-green-600'}`} />}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* インポートボタン */}
+                <button 
+                  onClick={() => csvInputRef.current.click()} 
+                  title="時間割CSVをインポート（追加・更新）"
+                  className={`p-2.5 rounded-xl border transition-all active:scale-95 flex items-center justify-center h-[38px] w-[38px] ${
+                    isDark 
+                      ? 'bg-gray-900/60 border-gray-800 text-gray-300 hover:text-white hover:bg-gray-800' 
+                      : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 shadow-sm'
+                  }`}
+                >
+                  <Download size={18} />
+                </button>
+                <input type="file" accept=".csv" className="hidden" ref={csvInputRef} onChange={handleCsvUpload} />
+
+                {/* エクスポートボタン */}
+                <button 
+                  onClick={handleCsvExport} 
+                  title="時間割をCSVとして保存（エクスポート）"
+                  className={`p-2.5 rounded-xl border transition-all active:scale-95 flex items-center justify-center h-[38px] w-[38px] ${
+                    isDark 
+                      ? 'bg-gray-900/60 border-gray-800 text-gray-300 hover:text-white hover:bg-gray-800' 
+                      : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 shadow-sm'
+                  }`}
+                >
+                  <Upload size={18} />
+                </button>
+              </div>
+            </div>
+
+            {!timetables[selectedTermTab] ? (
+              <div className="bg-blue-900/10 border border-blue-900/30 rounded-2xl p-8 text-center shadow-sm mt-8 mx-4 sm:mx-6 lg:mx-8">
+                <div className="bg-blue-900/30 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <UploadCloud size={32} className="text-blue-400" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">{selectedTermTab} のデータを読み込む</h3>
+                <p className="text-sm text-gray-400 mb-6 leading-relaxed">
+                  大学の履修登録状況照会からダウンロードした<br />「{selectedTermTab}のテキストファイル」を選択してください。<br />
+                  <span className="text-xs text-blue-400 font-semibold mt-2 inline-block bg-blue-900/30 px-2 py-1 rounded">※データはアカウントに安全に同期されます。</span>
+                </p>
+                <button onClick={() => csvInputRef.current.click()} className="bg-blue-600 hover:bg-blue-700 text-white keep-white font-bold py-3 px-6 rounded-full transition-colors shadow-md active:scale-95 w-full max-w-xs">
+                  ファイルを選択する
+                </button>
+              </div>
+            ) : (() => {
+              const currentTimetable = timetables[selectedTermTab];
+              const periods = [1, 2, 3, 4, 5];
+              const activeDays = ['月', '火', '水', '木', '金'];
+
+              return (
+                <div className={`${isDark ? 'bg-gray-900 text-white' : 'bg-white text-slate-900'} sm:rounded-2xl shadow-md border-y sm:border overflow-hidden w-full flex flex-col h-[calc(100vh-230px)] sm:h-auto ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
+                  <div style={{ gridTemplateColumns: `40px repeat(5, minmax(0, 1fr))` }} className={`grid border-b ${isDark ? 'border-gray-800 bg-gray-800' : 'border-gray-200 bg-gray-50'} flex-shrink-0`}>
+                    <div className={`p-1.5 border-r ${isDark ? 'border-gray-800' : 'border-gray-200'}`}></div>
+                    {activeDays.map(day => (
+                      <div key={day} className={`py-1.5 text-center text-[10px] sm:text-xs font-extrabold ${isDark ? 'text-gray-300 border-r border-gray-800' : 'text-slate-600 border-r border-gray-200'} last:border-r-0`}>{day}</div>
+                    ))}
+                  </div>
+                  <div className={`flex flex-col ${isDark ? 'bg-gray-900/80' : 'bg-white'} flex-grow h-0`}>
+                    {periods.map((period, index) => (
+                      <div key={period} style={{ gridTemplateColumns: `40px repeat(5, minmax(0, 1fr))` }} className={`grid flex-1 min-h-[60px] sm:min-h-[125px] ${index !== periods.length - 1 ? `border-b ${isDark ? 'border-gray-800' : 'border-gray-200'}` : ''}`}>
+                        <div className={`p-0.5 flex flex-col items-center justify-center border-r ${isDark ? 'border-gray-800 bg-gray-800/50' : 'border-gray-200 bg-gray-50'} ${isDark ? 'text-gray-300' : 'text-slate-700'}`}>
+                          <span className={`text-sm sm:text-lg font-black ${isDark ? 'text-gray-200' : 'text-slate-900'} leading-none`}>{period}</span>
+                          <span className={`text-[7px] sm:text-[10px] font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'} whitespace-pre text-center mt-0.5 leading-none`}>{PERIOD_TIMES[period]}</span>
+                        </div>
+                        {activeDays.map(day => {
+                          const lesson = currentTimetable[period]?.[day];
+                          return (
+                            <div key={day}
+                              onClick={() => {
+                                if (lesson) {
+                                  setSelectedLesson(lesson);
+                                  setLessonModalTab('talk');
+                                }
+                              }}
+                              className={`p-0.5 sm:p-1.5 border-r ${isDark ? 'border-gray-800' : 'border-gray-200'} last:border-r-0 transition-all flex flex-col ${lesson ? `cursor-pointer ${isDark ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}` : `${isDark ? 'bg-gray-950' : 'bg-white'}`}`}>
+                              {lesson && (() => {
+                                const color = getLessonColor(lesson.name, lessonColors);
+                                return (
+                                  <div className={`flex-grow w-full ${color.bg} rounded-md sm:rounded-xl shadow-sm border ${color.border} p-1 sm:p-2.5 flex flex-col justify-start hover:shadow-md ${color.hoverBorder} transition-all overflow-hidden relative group`}>
+                                    <span className={`text-[9px] sm:text-[14px] font-extrabold ${color.text} leading-snug line-clamp-3 sm:line-clamp-4 break-words`}>{lesson.name}</span>
+                                    <div className="mt-auto pt-0.5 sm:pt-1.5">
+                                      <div className={`text-[7px] sm:text-[11.5px] ${color.text} opacity-90 flex items-start font-bold leading-tight`}>
+                                        <MapPin size={8} className={`mr-0.5 sm:mr-1 sm:w-3.5 sm:h-3.5 flex-shrink-0 mt-[1px] ${color.text === 'text-white keep-white' ? 'text-white keep-white' : 'text-gray-400'}`} />
+                                        <span className="line-clamp-1 sm:line-clamp-2 break-words">{lesson.room || '教室未設定'}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {timetables[selectedTermTab] && timetables[selectedTermTab].intensive && timetables[selectedTermTab].intensive.length > 0 && (
+              <div className="mt-6 mx-4 sm:mx-6 lg:mx-8">
+                <h3 className="text-lg font-extrabold text-white mb-3 flex items-center">
+                  <Plus size={18} className="mr-1.5 text-blue-400" /> 集中講義・その他
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                  {timetables[selectedTermTab].intensive.map((lesson, idx) => {
+                    const color = getLessonColor(lesson.name, lessonColors);
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          setSelectedLesson(lesson);
+                          setLessonModalTab('talk');
+                        }}
+                        className={`p-3.5 rounded-xl cursor-pointer shadow-sm border transition-all hover:scale-[1.01] active:scale-98 flex flex-col justify-between ${color.bg} ${color.border} ${color.hoverBorder} ${isDark ? 'text-white' : 'text-slate-900'}`}
+                      >
+                        <div>
+                          <div className="flex justify-between items-start mb-1.5">
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${isDark ? 'bg-black/30 text-gray-300' : 'bg-white/50 text-slate-700'}`}>
+                              {lesson.period}
+                            </span>
+                            <span className={`text-[9px] font-bold ${color.text} opacity-80`}>
+                              {lesson.credit}
+                            </span>
+                          </div>
+                          <h4 className="text-sm font-extrabold leading-snug line-clamp-2 break-all">{lesson.name}</h4>
+                        </div>
+                        <div className="mt-3 pt-2 border-t border-white/10 flex flex-col gap-1">
+                          <div className={`text-[10px] ${color.text} opacity-90 flex items-center font-bold`}>
+                            <MapPin size={10} className="mr-1 flex-shrink-0" />
+                            <span className="truncate">{lesson.room || '教室未設定'}</span>
+                          </div>
+                          <div className={`text-[10px] ${color.text} opacity-75 flex items-center`}>
+                            <span className="truncate">担当: {lesson.teacher || '未設定'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 2. 友達の時間割 */}
+        <div className="w-full shrink-0 snap-start snap-always px-4 sm:px-6 lg:px-8">
+          <div className={`border rounded-3xl p-10 text-center max-w-md mx-auto my-12 shadow-lg backdrop-blur ${
+            isDark ? 'bg-gray-900/40 border-gray-800' : 'bg-gray-50/50 border-gray-200'
+          }`}>
+            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 border animate-pulse ${
+              isDark ? 'bg-blue-950/40 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-600'
+            }`}>
+              <Users size={36} />
+            </div>
+            <h3 className={`text-xl font-black mb-3 ${isDark ? 'text-white' : 'text-gray-800'}`}>友達の時間割</h3>
+            <p className={`text-sm leading-relaxed mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              お友達と時間割をシェアして、空きコマの確認や授業情報の共有が簡単にできるようになる機能です。
+            </p>
+            <span className={`inline-block text-xs px-4 py-2 rounded-full font-bold border ${
+              isDark ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
+            }`}>
+              🚧 現在開発中（アップデートをお楽しみに！）
+            </span>
+          </div>
+        </div>
+
+        {/* 3. 埼大住民 */}
+        <div className="w-full shrink-0 snap-start snap-always px-4 sm:px-6 lg:px-8">
+          <div className={`border rounded-3xl p-10 text-center max-w-md mx-auto my-12 shadow-lg backdrop-blur ${
+            isDark ? 'bg-gray-900/40 border-gray-800' : 'bg-gray-50/50 border-gray-200'
+          }`}>
+            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 border animate-pulse ${
+              isDark ? 'bg-purple-950/40 border-purple-500/20 text-purple-400' : 'bg-purple-50 border-purple-200 text-purple-600'
+            }`}>
+              <Globe size={36} />
+            </div>
+            <h3 className={`text-xl font-black mb-3 ${isDark ? 'text-white' : 'text-gray-800'}`}>埼大住民</h3>
+            <p className={`text-sm leading-relaxed mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+              同じ授業を履修している埼大生や、空きコマが同じ友達を見つけて繋がることができるコミュニティ機能です。
+            </p>
+            <span className={`inline-block text-xs px-4 py-2 rounded-full font-bold border ${
+              isDark ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-700 border-purple-200'
+            }`}>
+              🚧 現在開発中（アップデートをお楽しみに！）
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ⚠️ 詳細モーダル (従来通りスライドの外側でフローティングレンダリング) */}
       {selectedLesson && (() => {
         const color = getLessonColor(selectedLesson.name, lessonColors);
         return (
