@@ -1919,6 +1919,8 @@ export default function MainApp() {
                         items: [
                           { id: 'campus_square', label: 'ｷｬﾝﾊﾟｽｽｸｴｱ', url: 'https://web.risyu.saitama-u.ac.jp/campusweb/', icon: GraduationCap, color: isDark ? 'text-indigo-400' : 'text-indigo-600', type: 'ext' },
                           { id: 'webclass', label: 'WebClass', url: 'https://webclass.gks.saitama-u.ac.jp', icon: BookOpen, color: isDark ? 'text-teal-400' : 'text-teal-600', type: 'ext' },
+                          { id: 'web_attendance', label: 'Web出席登録', url: 'https://attendance.risyu.saitama-u.ac.jp/campusaa/', icon: CheckSquare, color: isDark ? 'text-green-400' : 'text-green-600', type: 'ext' },
+                          { id: 'web_mail', label: 'Webメール', url: 'https://outlook.office.com/mail/?realm=ms.saitama-u.ac.jp', icon: Mail, color: isDark ? 'text-blue-400' : 'text-blue-600', type: 'ext' },
                           { id: 'websyllabus', label: 'Webシラバス', url: 'https://syllabus.risyu.saitama-u.ac.jp/syllabus/', icon: Book, color: isDark ? 'text-emerald-400' : 'text-emerald-600', type: 'ext' },
                           { id: 'elearning', label: 'eラーニング', url: 'https://saitama-u.supereigo.com/student/main/login', icon: MonitorPlay, color: isDark ? 'text-cyan-400' : 'text-cyan-600', type: 'ext' },
                           { id: 'homepage', label: '埼大HP', url: 'https://www.saitama-u.ac.jp/student/', icon: Globe, color: isDark ? 'text-sky-400' : 'text-sky-600', type: 'ext' }
