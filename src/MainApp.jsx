@@ -15,6 +15,7 @@ import { BadgeModal, FollowListModal, RoomModal, ProfileEditModal, TermsModal, P
 import TimetableComponent from './Timetable';
 import ToDoCalendarComponent from './ToDoCalendar';
 import CameraApp from './CameraApp';
+import UniversityNotice from './UniversityNotice';
 import { VERIFIED_USERS, VETERAN_USERS, NAMING_USERS, LESSON_COLORS, DEFAULT_LESSON_COLOR, getLessonColor, getWeatherInfo, formatTimeAgo, sanitizeRoomId, isValidId, compressImage, parseCSV, Avatar, SPOTS, LEVELS, FEATURE_POLL_OPTIONS, encodeFirestoreFieldKey } from './utils';
 
 const DEFAULT_BOARD_ROOM = sanitizeRoomId('埼玉大学全体');
@@ -154,6 +155,7 @@ export default function MainApp() {
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [termsModalTab, setTermsModalTab] = useState('terms');
   const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [isNoticeOpen, setIsNoticeOpen] = useState(false);
 
   const [toastMessage, setToastMessage] = useState("");
   const [currentBottomTab, setCurrentBottomTab] = useState('ホーム');
@@ -1937,7 +1939,8 @@ export default function MainApp() {
                         title: '学生生活',
                         items: [
                           { id: 'bus-timetable-section', label: 'バス時刻表', icon: Bus, color: isDark ? 'text-blue-400' : 'text-blue-600', type: 'jump' },
-                          { id: 'cafeteria-section', label: '学食情報', icon: Utensils, color: isDark ? 'text-orange-400' : 'text-orange-600', type: 'jump' }
+                          { id: 'cafeteria-section', label: '学食情報', icon: Utensils, color: isDark ? 'text-orange-400' : 'text-orange-600', type: 'jump' },
+                          { id: 'notice-section', label: '大学からのお知らせ', icon: Megaphone, color: isDark ? 'text-red-400' : 'text-red-600', type: 'notice' }
                         ]
                       },
                       {
@@ -1976,6 +1979,8 @@ export default function MainApp() {
                                   setCurrentBottomTab('キャンパス地図');
                                 } else if (item.type === 'camera') {
                                   setIsCameraOpen(true);
+                                } else if (item.type === 'notice') {
+                                  setIsNoticeOpen(true);
                                 } else if (item.type === 'ext') {
                                   window.open(item.url, '_blank');
                                 }
@@ -2372,6 +2377,11 @@ export default function MainApp() {
         {/* カメラモーダル */}
         {isCameraOpen && (
           <CameraApp onClose={() => setIsCameraOpen(false)} />
+        )}
+
+        {/* 大学からのお知らせモーダル */}
+        {isNoticeOpen && (
+          <UniversityNotice onClose={() => setIsNoticeOpen(false)} isDark={isDark} />
         )}
 
         {/* ⚠️ フッターナビゲーション (lg以下で表示) */}
