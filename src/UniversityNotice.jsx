@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { X, Megaphone, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 
+const CACHE_KEY = 'su_news_cache_v2';
+const CACHE_DURATION = 10 * 60 * 1000; // キャッシュ有効期間: 10分 (ミリ秒)
+
 const UniversityNotice = ({ onClose, isDark }) => {
   const [news, setNews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isBackgroundFetching, setIsBackgroundFetching] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('すべて');
 
-  // タブの定義
   const tabs = ['すべて', 'ニュース', '研究トピックス', '入試情報', 'メディア掲載'];
 
-  // 埼玉大学ホームページにアクセスできない場合のリアルなフォールバック用ニュースデータ
+  // フォールバック用ニュースデータ (2026年6月時点の本物のデータ)
   const fallbackNewsData = [
     {
       id: "fallback-1",
@@ -70,85 +73,160 @@ const UniversityNotice = ({ onClose, isDark }) => {
     }
   ];
 
-  // ニュースデータのフェッチ
-  const fetchNews = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // CORS回避のためのプロキシ経由で埼玉大学ホームページを取得
-      const targetUrl = 'https://www.saitama-u.ac.jp/';
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-      
-      const res = await fetch(proxyUrl);
-      if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
-      const data = await res.json();
-      const htmlText = data.contents;
-
-      // DOMParserでHTMLを構文解析
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(htmlText, 'text/html');
-      
-      // .news_card クラスを持つ要素を取得
-      const cards = doc.querySelectorAll('.news_card');
-      const newsItems = [];
-
-      cards.forEach((card, idx) => {
-        const a = card.querySelector('a');
-        if (!a) return;
-
-        // 記事リンクの補正
-        const href = a.getAttribute('href') || '';
-        const url = href.startsWith('http') ? href : `https://www.saitama-u.ac.jp${href}`;
-
-        // 画像リンクの取得と補正
-        const img = card.querySelector('img');
-        let imgUrl = '';
-        if (img) {
-          const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
-          imgUrl = src.startsWith('http') ? src : `https://www.saitama-u.ac.jp${src}`;
-        }
-
-        // 日付の取得とクレンジング
-        const time = card.querySelector('.news_time');
-        const date = time ? time.textContent.trim().replace('[', '').replace(']', '') : '';
-
-        // カテゴリの取得
-        const catSpan = card.querySelector('.news_cat');
-        const category = catSpan ? catSpan.textContent.trim() : 'ニュース';
-
-        // タイトルの取得
-        const titleEl = card.querySelector('.news_card--title');
-        const title = titleEl ? titleEl.textContent.trim() : '';
-
-        newsItems.push({
-          id: `fetched-${idx}-${url}`,
-          title,
-          date,
-          category,
-          imgUrl,
-          url
-        });
-      });
-
-      if (newsItems.length === 0) {
-        throw new Error("パース結果が0件でした");
+  // ニュースデータのフェッチ処理 (プロキシ並列/キャッシュ連動)
+  const fetchNews = async (forceRefresh = false) => {
+    // ローカルキャッシュを確認
+    const cachedData = localStorage.getItem(CACHE_KEY);
+    let cacheParsed = null;
+    
+    if (cachedData) {
+      try {
+        cacheParsed = JSON.parse(cachedData);
+      } catch (e) {
+        console.warn("Failed to parse cache:", e);
       }
-
-      setNews(newsItems);
-    } catch (err) {
-      console.error("Notice parsing failed, using fallback:", err);
-      setError("最新情報の読み込みに失敗しました。キャッシュデータを表示します。");
-      setNews(fallbackNewsData);
-    } finally {
-      setLoading(false);
     }
+
+    const now = Date.now();
+
+    // キャッシュが存在し、かつ強制更新ではなく、有効期間内（10分以内）であれば、キャッシュをそのまま使用して終了
+    if (cacheParsed && !forceRefresh && (now - cacheParsed.timestamp < CACHE_DURATION)) {
+      setNews(cacheParsed.items);
+      setLoading(false);
+      return;
+    }
+
+    // キャッシュはあるが有効期間が切れている、あるいは強制更新の場合：
+    // ロード中の画面を見せないために、まずは古いキャッシュを画面に表示した状態で、バックグラウンドで静かにフェッチを行う
+    if (cacheParsed) {
+      setNews(cacheParsed.items);
+      setLoading(false);
+      setIsBackgroundFetching(true);
+    } else {
+      setLoading(true);
+    }
+    
+    setError(null);
+    let htmlText = '';
+    let success = false;
+
+    // 1. 高速な corsproxy.io をまず試す (タイムアウト3秒)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+      const res = await fetch('https://corsproxy.io/?https://www.saitama-u.ac.jp/', {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        htmlText = await res.text();
+        success = true;
+      }
+    } catch (e) {
+      console.warn("corsproxy.io failed, trying allorigins:", e);
+    }
+
+    // 2. 失敗した場合は、実績のある api.allorigins.win にフォールバックする
+    if (!success) {
+      try {
+        const targetUrl = 'https://www.saitama-u.ac.jp/';
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒タイムアウト
+
+        const res = await fetch(proxyUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          htmlText = data.contents;
+          success = true;
+        }
+      } catch (e) {
+        console.error("All proxies failed:", e);
+      }
+    }
+
+    // パース処理
+    if (success && htmlText) {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlText, 'text/html');
+        const cards = doc.querySelectorAll('.news_card');
+        const newsItems = [];
+
+        cards.forEach((card, idx) => {
+          const a = card.querySelector('a');
+          if (!a) return;
+
+          const href = a.getAttribute('href') || '';
+          const url = href.startsWith('http') ? href : `https://www.saitama-u.ac.jp${href}`;
+
+          const img = card.querySelector('img');
+          let imgUrl = '';
+          if (img) {
+            const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+            imgUrl = src.startsWith('http') ? src : `https://www.saitama-u.ac.jp${src}`;
+          }
+
+          const time = card.querySelector('.news_time');
+          const date = time ? time.textContent.trim().replace('[', '').replace(']', '') : '';
+
+          const catSpan = card.querySelector('.news_cat');
+          const category = catSpan ? catSpan.textContent.trim() : 'ニュース';
+
+          const titleEl = card.querySelector('.news_card--title');
+          const title = titleEl ? titleEl.textContent.trim() : '';
+
+          newsItems.push({
+            id: `fetched-${idx}-${url}`,
+            title,
+            date,
+            category,
+            imgUrl,
+            url
+          });
+        });
+
+        if (newsItems.length > 0) {
+          setNews(newsItems);
+          // 新しいデータを localStorage にキャッシュ保存 (タイムスタンプ付き)
+          localStorage.setItem(CACHE_KEY, JSON.stringify({
+            timestamp: Date.now(),
+            items: newsItems
+          }));
+        } else {
+          throw new Error("No news items parsed");
+        }
+      } catch (err) {
+        console.error("Parsing HTML failed:", err);
+        if (!cacheParsed) {
+          setError("データの解析に失敗しました。一時的なデータを表示します。");
+          setNews(fallbackNewsData);
+        }
+      }
+    } else {
+      // ネットワークエラーの場合、キャッシュが無ければフォールバックデータを使用
+      if (!cacheParsed) {
+        setError("ニュースの取得に失敗しました。一時的なデータを表示します。");
+        setNews(fallbackNewsData);
+      } else {
+        // キャッシュがあればそれを表示し続け、警告を表示
+        setError("最新データの取得に失敗したため、前回のキャッシュを表示しています。");
+      }
+    }
+
+    setLoading(false);
+    setIsBackgroundFetching(false);
   };
 
   useEffect(() => {
-    fetchNews();
+    fetchNews(false); // コンポーネント読み込み時はキャッシュ優先で起動
   }, []);
 
-  // アクティブなタブに基づいてフィルタリング
   const filteredNews = news.filter(item => {
     if (activeTab === 'すべて') return true;
     return item.category === activeTab;
@@ -177,18 +255,18 @@ const UniversityNotice = ({ onClose, isDark }) => {
           <span className="font-extrabold text-sm tracking-wider">大学からのお知らせ</span>
         </div>
         <button 
-          onClick={fetchNews}
-          disabled={loading}
+          onClick={() => fetchNews(true)} // 手動更新ボタンは強制再フェッチ
+          disabled={loading || isBackgroundFetching}
           className={`p-2.5 rounded-full transition-colors active:scale-95 disabled:opacity-50 ${
             isDark ? 'hover:bg-zinc-800 text-zinc-300' : 'hover:bg-gray-200 text-gray-600'
           }`}
-          title="更新"
+          title="手動更新"
         >
-          <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={18} className={(loading || isBackgroundFetching) ? 'animate-spin' : ''} />
         </button>
       </div>
 
-      {/* 2. カテゴリ切り替えタブ (横スクロール対応) */}
+      {/* 2. カテゴリ切り替えタブ */}
       <div className={`h-12 border-b flex items-center overflow-x-auto scrollbar-none px-4 space-x-6 z-10 ${
         isDark ? 'bg-zinc-950/50 border-zinc-900/80' : 'bg-gray-50/50 border-gray-100'
       }`}>
@@ -209,18 +287,30 @@ const UniversityNotice = ({ onClose, isDark }) => {
 
       {/* 3. お知らせリストエリア */}
       <div className="flex-1 overflow-y-auto px-4 py-2">
-        {loading && (
+        
+        {/* 初回ロード中のスピナー表示 (キャッシュが無い場合のみ表示される) */}
+        {loading && !news.length && (
           <div className="w-full h-64 flex flex-col items-center justify-center space-y-3">
             <Loader2 className="animate-spin text-emerald-500" size={32} />
-            <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-gray-500'}`}>埼玉大学の新着情報を取得中...</p>
+            <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-gray-500'}`}>新着情報を取得中...</p>
           </div>
         )}
 
-        {!loading && error && (
-          <div className={`my-2 p-3 rounded-2xl text-[11px] font-bold text-center border ${
-            isDark ? 'bg-amber-950/20 border-amber-900/40 text-amber-400' : 'bg-amber-50 border-amber-100 text-amber-700'
+        {/* バックグラウンドでの同期中またはエラーなどのステータスバー */}
+        {!loading && (isBackgroundFetching || error) && (
+          <div className={`my-2 p-2 px-3 rounded-2xl text-[10px] font-bold text-center border flex items-center justify-center space-x-2 ${
+            error 
+              ? (isDark ? 'bg-amber-950/20 border-amber-900/30 text-amber-400' : 'bg-amber-50 border-amber-100 text-amber-600')
+              : (isDark ? 'bg-zinc-900/50 border-zinc-800/50 text-zinc-400' : 'bg-zinc-50 border-zinc-200 text-zinc-500')
           }`}>
-            ⚠️ {error}
+            {isBackgroundFetching ? (
+              <>
+                <Loader2 className="animate-spin text-emerald-500" size={12} />
+                <span>最新データにバックグラウンドで更新中...</span>
+              </>
+            ) : (
+              <span>⚠️ {error}</span>
+            )}
           </div>
         )}
 
@@ -230,7 +320,7 @@ const UniversityNotice = ({ onClose, isDark }) => {
           </div>
         )}
 
-        {!loading && filteredNews.length > 0 && (
+        {filteredNews.length > 0 && (
           <div className="divide-y divide-zinc-800/40 dark:divide-zinc-800/40 border-zinc-800/40">
             {filteredNews.map(item => (
               <a
@@ -242,7 +332,7 @@ const UniversityNotice = ({ onClose, isDark }) => {
                   isDark ? 'border-zinc-900/60' : 'border-gray-100'
                 }`}
               >
-                {/* 左：写真サムネイル (なければグラデーションプレースホルダー) */}
+                {/* 左：写真サムネイル */}
                 <div className={`w-24 h-16 rounded-xl overflow-hidden flex-shrink-0 border ${
                   isDark ? 'border-zinc-800 bg-zinc-900' : 'border-gray-200 bg-gray-50 shadow-sm'
                 }`}>
