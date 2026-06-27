@@ -14,6 +14,7 @@ import CommunityComponent, { PostItem } from './Community';
 import { BadgeModal, FollowListModal, RoomModal, ProfileEditModal, TermsModal, ProfileSettingsModal } from './Modals';
 import TimetableComponent from './Timetable';
 import ToDoCalendarComponent from './ToDoCalendar';
+import CameraApp from './CameraApp';
 import { VERIFIED_USERS, VETERAN_USERS, NAMING_USERS, LESSON_COLORS, DEFAULT_LESSON_COLOR, getLessonColor, getWeatherInfo, formatTimeAgo, sanitizeRoomId, isValidId, compressImage, parseCSV, Avatar, SPOTS, LEVELS, FEATURE_POLL_OPTIONS, encodeFirestoreFieldKey } from './utils';
 
 const DEFAULT_BOARD_ROOM = sanitizeRoomId('埼玉大学全体');
@@ -152,6 +153,7 @@ export default function MainApp() {
   const [showPassword, setShowPassword] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [termsModalTab, setTermsModalTab] = useState('terms');
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
 
   const [toastMessage, setToastMessage] = useState("");
   const [currentBottomTab, setCurrentBottomTab] = useState('ホーム');
@@ -1910,56 +1912,99 @@ export default function MainApp() {
 
 
 
-                  <div className="py-4 grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 lg:grid-cols-8 gap-y-5 gap-x-2 w-full place-items-start">
+                  <div className="space-y-4 w-full mt-4">
                     {[
-                      { id: 'bus-timetable-section', label: 'バス時刻表', icon: Bus, color: isDark ? 'text-blue-400' : 'text-blue-600', type: 'jump' },
-                      { id: 'cafeteria-section', label: '学食情報', icon: Utensils, color: isDark ? 'text-orange-400' : 'text-orange-600', type: 'jump' },
-                      { id: 'campus-map-section', label: 'キャンパス地図', icon: Map, color: isDark ? 'text-indigo-400' : 'text-indigo-600', type: 'map' },
-                      { id: 'wiki-section', label: 'Wiki', icon: BookOpen, color: isDark ? 'text-teal-400' : 'text-teal-600', type: 'wiki' },
-
-                      { id: 'power', label: '電源スポット', icon: Zap, color: isDark ? 'text-yellow-400' : 'text-yellow-600', type: 'future' },
-                      { id: 'notice', label: '大学からのお知らせ', icon: Megaphone, color: isDark ? 'text-red-400' : 'text-red-600', type: 'future' },
-                      { id: 'timetable', label: '友達の時間割', icon: UserPlus, color: isDark ? 'text-pink-400' : 'text-pink-600', type: 'future' },
-
-                      { id: 'campus_square', label: 'ｷｬﾝﾊﾟｽｽｸｴｱ', url: 'https://web.risyu.saitama-u.ac.jp/campusweb/', icon: GraduationCap, color: isDark ? 'text-indigo-400' : 'text-indigo-600', type: 'ext' },
-                      { id: 'webclass', label: 'WebClass', url: 'https://webclass.gks.saitama-u.ac.jp', icon: BookOpen, color: isDark ? 'text-teal-400' : 'text-teal-600', type: 'ext' },
-                      { id: 'websyllabus', label: 'Webシラバス', url: 'https://syllabus.risyu.saitama-u.ac.jp/syllabus/', icon: Book, color: isDark ? 'text-emerald-400' : 'text-emerald-600', type: 'ext' },
-                      { id: 'elearning', label: 'eラーニング', url: 'https://saitama-u.supereigo.com/student/main/login', icon: MonitorPlay, color: isDark ? 'text-cyan-400' : 'text-cyan-600', type: 'ext' },
-                      { id: 'homepage', label: '埼大HP', url: 'https://www.saitama-u.ac.jp/student/', icon: Globe, color: isDark ? 'text-sky-400' : 'text-sky-600', type: 'ext' },
-                      { id: 'library', label: '図書館', url: 'https://www.lib.saitama-u.ac.jp/', icon: Library, color: isDark ? 'text-rose-400' : 'text-rose-600', type: 'ext' }
-                    ].map(item => (
-                      <button
-                        type="button"
-                        key={item.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (item.type === 'jump') {
-                            const el = document.getElementById(item.id);
-                            if (el) {
-                              const yOffset = -80;
-                              const y = el.getBoundingClientRect().top + window.scrollY + yOffset;
-                              window.scrollTo({ top: y, behavior: 'smooth' });
-                            }
-                          } else if (item.type === 'map') {
-                            setCurrentBottomTab('キャンパス地図');
-                          } else if (item.type === 'wiki') {
-                            navigate('/wiki');
-                          } else if (item.type === 'ext') {
-                            window.open(item.url, '_blank');
-                          } else if (item.type === 'future') {
-                            setToastMessage('🚧 現在開発中！');
-                            setTimeout(() => setToastMessage(''), 3000);
-                          }
-                        }}
-                        className={`flex flex-col items-center justify-start w-full group transition-transform ${item.type !== 'future' ? 'active:scale-95' : 'opacity-60'}`}
+                      {
+                        title: '授業関連',
+                        items: [
+                          { id: 'campus_square', label: 'ｷｬﾝﾊﾟｽｽｸｴｱ', url: 'https://web.risyu.saitama-u.ac.jp/campusweb/', icon: GraduationCap, color: isDark ? 'text-indigo-400' : 'text-indigo-600', type: 'ext' },
+                          { id: 'webclass', label: 'WebClass', url: 'https://webclass.gks.saitama-u.ac.jp', icon: BookOpen, color: isDark ? 'text-teal-400' : 'text-teal-600', type: 'ext' },
+                          { id: 'websyllabus', label: 'Webシラバス', url: 'https://syllabus.risyu.saitama-u.ac.jp/syllabus/', icon: Book, color: isDark ? 'text-emerald-400' : 'text-emerald-600', type: 'ext' },
+                          { id: 'elearning', label: 'eラーニング', url: 'https://saitama-u.supereigo.com/student/main/login', icon: MonitorPlay, color: isDark ? 'text-cyan-400' : 'text-cyan-600', type: 'ext' },
+                          { id: 'homepage', label: '埼大HP', url: 'https://www.saitama-u.ac.jp/student/', icon: Globe, color: isDark ? 'text-sky-400' : 'text-sky-600', type: 'ext' }
+                        ]
+                      },
+                      {
+                        title: 'キャンパス・施設',
+                        items: [
+                          { id: 'campus-map-section', label: 'キャンパス地図', icon: Map, color: isDark ? 'text-indigo-400' : 'text-indigo-600', type: 'map' },
+                          { id: 'library', label: '図書館', url: 'https://www.lib.saitama-u.ac.jp/', icon: Library, color: isDark ? 'text-rose-400' : 'text-rose-600', type: 'ext' }
+                        ]
+                      },
+                      {
+                        title: '学生生活',
+                        items: [
+                          { id: 'bus-timetable-section', label: 'バス時刻表', icon: Bus, color: isDark ? 'text-blue-400' : 'text-blue-600', type: 'jump' },
+                          { id: 'cafeteria-section', label: '学食情報', icon: Utensils, color: isDark ? 'text-orange-400' : 'text-orange-600', type: 'jump' }
+                        ]
+                      },
+                      {
+                        title: '便利ツール',
+                        items: [
+                          { id: 'camera', label: 'カメラ', icon: Camera, color: isDark ? 'text-emerald-400' : 'text-emerald-600', type: 'camera' }
+                        ]
+                      }
+                    ].map(group => (
+                      <div 
+                        key={group.title} 
+                        className={`p-4 rounded-3xl border transition-colors duration-300 ${
+                          isDark 
+                            ? 'bg-zinc-950/40 border-zinc-900' 
+                            : 'bg-[#fafafa] border-[#f0f0f0] shadow-[0_1px_3px_rgba(0,0,0,0.02)]'
+                        }`}
                       >
-                        <div className={`w-14 h-14 flex items-center justify-center rounded-2xl mb-2 transition-colors border ${isDark ? 'bg-gray-800/80 hover:bg-gray-700 border-gray-700' : 'bg-[#ffffff] hover:bg-[#f9fafb] border-[#e5e7eb] shadow-sm'} ${item.type === 'future' ? 'cursor-not-allowed' : ''}`}>
-                           <item.icon size={26} className={item.color} strokeWidth={1.5} />
+                        <h3 className={`text-base sm:text-lg font-extrabold tracking-tight mb-3 ${isDark ? 'text-white' : 'text-[#111827]'}`}>
+                          {group.title}
+                        </h3>
+                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 lg:grid-cols-8 gap-y-5 gap-x-2 w-full place-items-start">
+                          {group.items.map(item => (
+                            <button
+                              type="button"
+                              key={item.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (item.type === 'jump') {
+                                  const el = document.getElementById(item.id);
+                                  if (el) {
+                                    const yOffset = -80;
+                                    const y = el.getBoundingClientRect().top + window.scrollY + yOffset;
+                                    window.scrollTo({ top: y, behavior: 'smooth' });
+                                  }
+                                } else if (item.type === 'map') {
+                                  setCurrentBottomTab('キャンパス地図');
+                                } else if (item.type === 'camera') {
+                                  setIsCameraOpen(true);
+                                } else if (item.type === 'ext') {
+                                  window.open(item.url, '_blank');
+                                }
+                              }}
+                              className="flex flex-col items-center justify-start w-full group transition-transform active:scale-95"
+                            >
+                              <div className={`w-14 h-14 flex items-center justify-center rounded-2xl mb-2 transition-colors border ${
+                                isDark 
+                                  ? 'bg-gray-800/80 hover:bg-gray-700 border-gray-700' 
+                                  : 'bg-[#ffffff] hover:bg-[#f9fafb] border-[#e5e7eb] shadow-sm'
+                              }`}>
+                                <item.icon size={26} className={item.color} strokeWidth={1.5} />
+                              </div>
+                              <span className={`text-[10px] sm:text-[11px] font-bold text-center leading-tight whitespace-normal break-words max-w-[64px] ${isDark ? 'text-gray-300' : 'text-[#4b5563]'}`}>
+                                {item.label}
+                              </span>
+                            </button>
+                          ))}
                         </div>
-                        <span className={`text-[10px] sm:text-[11px] font-bold text-center leading-tight whitespace-normal break-words max-w-[64px] ${isDark ? 'text-gray-300' : 'text-[#4b5563]'}`}>{item.label}</span>
-                      </button>
+                      </div>
                     ))}
                   </div>
+
+                  {/* 隠しアプリ定義 (ファイル/コード内のどっかには置いておくが、UI上には表示しない)
+                  _hiddenApps = [
+                    { id: 'wiki-section', label: 'Wiki', icon: BookOpen, color: isDark ? 'text-teal-400' : 'text-teal-600', type: 'wiki' },
+                    { id: 'power', label: '電源スポット', icon: Zap, color: isDark ? 'text-yellow-400' : 'text-yellow-600', type: 'future' },
+                    { id: 'notice', label: '大学からのお知らせ', icon: Megaphone, color: isDark ? 'text-red-400' : 'text-red-600', type: 'future' },
+                    { id: 'timetable', label: '友達の時間割', icon: UserPlus, color: isDark ? 'text-pink-400' : 'text-pink-600', type: 'future' },
+                  ]
+                  */}
                 </div>
               </div>
 
@@ -2321,6 +2366,11 @@ export default function MainApp() {
 
         {/* Terms Modal (ログイン後用) */}
         <TermsModal isOpen={isTermsModalOpen} onClose={() => setIsTermsModalOpen(false)} initialTab={termsModalTab} isDark={isDark} />
+
+        {/* カメラモーダル */}
+        {isCameraOpen && (
+          <CameraApp onClose={() => setIsCameraOpen(false)} />
+        )}
 
         {/* ⚠️ フッターナビゲーション (lg以下で表示) */}
         {/* ⚠️ フッターナビゲーション (lg以下で表示) */}
