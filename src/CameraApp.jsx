@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, RefreshCw, Camera, AlertCircle, Share2, Download, RotateCw } from 'lucide-react';
+import { X, RefreshCw, Camera, AlertCircle, Share2, Download, RotateCw, ZoomIn } from 'lucide-react';
 
 const CameraApp = ({ onClose }) => {
   const videoRef = useRef(null);
@@ -10,6 +10,9 @@ const CameraApp = ({ onClose }) => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   
+  // ズーム倍率 (1.0x, 2.0x, 3.0x) - ハードウェア依存せず全端末で動くデジタルズーム
+  const [zoomScale, setZoomScale] = useState(1.0);
+
   // 撮影後のプレビュー/保存用モーダル制御
   const [capturedImage, setCapturedImage] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -42,7 +45,7 @@ const CameraApp = ({ onClose }) => {
     };
   }, []);
 
-  // カメラストリームの開始 (高画質優先＋安全なフォールバックチェーン)
+  // カメラストリームの開始 (高画質優先)
   const startCamera = async (mode) => {
     setLoading(true);
     setError(null);
@@ -51,28 +54,37 @@ const CameraApp = ({ onClose }) => {
       stream.getTracks().forEach(track => track.stop());
     }
 
-    // 試行する constraints の優先順リスト (FHD -> HD -> デフォルト)
-    // 解像度を指定しないと、多くのスマホブラウザがデフォルトで低解像度(VGA 640x480等)で起動してしまい画質が劣化します
+    // 画質が荒い問題を根本解決するため、理想値(ideal)に4KやFHDの値を明示設定。
+    // かつ、デバイス側が非対応の場合の起動失敗を防ぐため、最小解像度(min)を伴う安全なフォールバックチェーンを実装。
     const constraintsList = [
-      // 1. フルHD (1080p) - 背面カメラなどで高精細な写真を撮るため最優先
+      // 1. 4K解像度を理想とし、高精細なセンサー能力を引き出す (背面メインカメラなど)
       {
         video: {
           facingMode: { ideal: mode },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
+          width: { min: 1920, ideal: 3840 },
+          height: { min: 1080, ideal: 2160 }
         },
         audio: false
       },
-      // 2. HD (720p) - FHDがサポートされないインカメラや古い端末向け
+      // 2. フルHD (1080p) - バランスの良い高画質
       {
         video: {
           facingMode: { ideal: mode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+          width: { min: 1280, ideal: 1920 },
+          height: { min: 720, ideal: 1080 }
         },
         audio: false
       },
-      // 3. 最低限 (解像度おまかせ、起動優先)
+      // 3. HD (720p) - 古いスマホやインカメラ向け
+      {
+        video: {
+          facingMode: { ideal: mode },
+          width: { min: 640, ideal: 1280 },
+          height: { min: 480, ideal: 720 }
+        },
+        audio: false
+      },
+      // 4. 最低限 (起動優先)
       {
         video: {
           facingMode: { ideal: mode }
@@ -124,7 +136,17 @@ const CameraApp = ({ onClose }) => {
   // 前面/背面カメラ切り替え
   const toggleCamera = () => {
     if (loading || capturedImage) return;
+    setZoomScale(1.0); // カメラ切り替え時はズームをリセット
     setFacingMode(prev => prev === 'environment' ? 'user' : 'environment');
+  };
+
+  // ズーム切り替え (1x -> 2x -> 3x -> 1x)
+  const toggleZoom = () => {
+    setZoomScale(prev => {
+      if (prev === 1.0) return 2.0;
+      if (prev === 2.0) return 3.0;
+      return 1.0;
+    });
   };
 
   // 写真の撮影処理
@@ -135,7 +157,7 @@ const CameraApp = ({ onClose }) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
 
-    // ビデオの実際の物理解像度
+    // ビデオの実際の解像度
     const videoWidth = video.videoWidth;
     const videoHeight = video.videoHeight;
 
@@ -144,18 +166,16 @@ const CameraApp = ({ onClose }) => {
       ? window.orientation 
       : (screen.orientation ? screen.orientation.angle : 0);
 
-    // 最近のiOSやAndroidで window.orientation が常に 0 に固定されてしまうバグの対策
-    // 実際のウィンドウ幅と高さの比率から、縦持ちか横持ちかを確実に検知します
+    // 縦横の検知バグ対策 (比率から画面の向きを判定)
     const isPortrait = window.innerHeight > window.innerWidth;
     if (orient === 0 && !isPortrait) {
-      orient = 90; // 横持ちなのに 0 と誤認されている場合は 90度（横）として補正
+      orient = 90;
     }
 
     const isLandscape = orient === 90 || orient === -90 || orient === 270;
     const isVideoLandscape = videoWidth > videoHeight;
 
-    // Canvas の解像度（サイズ）設定
-    // 縦持ちの時は Canvas を「縦長」に、横持ちの時は「横長」に設定し、歪みやはみ出しを防ぎます
+    // Canvas の解像度を設定 (FHD等のアスペクト比を維持)
     if (isLandscape) {
       canvas.width = Math.max(videoWidth, videoHeight);
       canvas.height = Math.min(videoWidth, videoHeight);
@@ -164,32 +184,27 @@ const CameraApp = ({ onClose }) => {
       canvas.height = Math.max(videoWidth, videoHeight);
     }
 
-    // 描画の基準点を Canvas の中心に移動
+    // 基準点を Canvas の中心へ移動
     ctx.translate(canvas.width / 2, canvas.height / 2);
 
-    // デバイスの回転とビデオフレームの向きのミスマッチを補正する回転角（ラジアン）の計算
+    // 回転角の計算
     let rotateRad = 0;
 
     if (orient === 0) {
-      // 縦持ちで、カメラフレームが横長（通常のセンサー向き）で送られてきている場合は90度回転が必要
       if (isVideoLandscape) {
         rotateRad = Math.PI / 2;
       }
     } else if (orient === 90) {
-      // 左に倒した横持ちで、カメラフレームが縦長の場合は-90度回転が必要
       if (!isVideoLandscape) {
         rotateRad = -Math.PI / 2;
       }
     } else if (orient === -90 || orient === 270) {
-      // 右に倒した横持ち
       if (!isVideoLandscape) {
         rotateRad = Math.PI / 2;
       } else {
-        // ビデオが横長であっても、天地を逆転させるために180度回転が必要な場合がある
         rotateRad = Math.PI;
       }
     } else if (orient === 180) {
-      // 逆さ縦持ち
       rotateRad = Math.PI;
       if (isVideoLandscape) {
         rotateRad = -Math.PI / 2;
@@ -198,20 +213,26 @@ const CameraApp = ({ onClose }) => {
     
     ctx.rotate(rotateRad);
 
-    // インカメラ（user）の場合は鏡像反転を適用（プレビューで見ている鏡と同じ向きのまま保存）
+    // インカメラ（user）の場合は鏡像反転を適用
     if (facingMode === 'user') {
-      // 自撮り反転：回転後の座標系に対して左右（水平方向）を反転
       ctx.scale(-1, 1);
     }
 
-    // ビデオの縦横比を一切崩さずに Canvas の中心に等倍で描画
-    ctx.drawImage(video, -videoWidth / 2, -videoHeight / 2, videoWidth, videoHeight);
+    // デジタルズームに応じたビデオフレームのクロップ（切り抜き）計算
+    // zoomScaleが1.0より大きい時、ビデオの中心部分を縮小して切り取り、Canvasへ等倍描画することでズーム処理を実現
+    const sw = videoWidth / zoomScale;
+    const sh = videoHeight / zoomScale;
+    const sx = (videoWidth - sw) / 2;
+    const sy = (videoHeight - sh) / 2;
+
+    // クロップ描画 (ズームが適用された状態で写真を切り出し)
+    ctx.drawImage(video, sx, sy, sw, sh, -videoWidth / 2, -videoHeight / 2, videoWidth, videoHeight);
 
     // 描画設定をリセット
     ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-    // プレビュー表示用に高画質なデータURLを取得
-    const dataUrl = canvas.toDataURL('image/png');
+    // 高精細なデータURLを取得 (画質を低下させない)
+    const dataUrl = canvas.toDataURL('image/png', 1.0);
     setCapturedImage(dataUrl);
 
     // フラッシュエフェクトを発火
@@ -220,7 +241,7 @@ const CameraApp = ({ onClose }) => {
       setIsFlashing(false);
     }, 200);
 
-    // ストリームを停止してカメラリソースを完全にクリーンアップ（発熱・バッテリー消費防止）
+    // ストリームを停止
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
       setStream(null);
@@ -247,7 +268,7 @@ const CameraApp = ({ onClose }) => {
     document.body.removeChild(a);
   };
 
-  // Web Share API を使用して、スマホの「共有シート」からカメラロールへ保存
+  // Web Share API を使用したカメラロール保存
   const saveToPhotosApp = async () => {
     if (!capturedImage || isSaving) return;
     setIsSaving(true);
@@ -279,7 +300,7 @@ const CameraApp = ({ onClose }) => {
   return (
     <div className="fixed inset-0 bg-black z-[9999] flex flex-col justify-between select-none">
       
-      {/* 非表示のキャンバス (高解像度画像処理・自動回転用) */}
+      {/* 非表示のキャンバス */}
       <canvas ref={canvasRef} className="hidden" />
 
       {/* フラッシュエフェクト */}
@@ -308,14 +329,20 @@ const CameraApp = ({ onClose }) => {
 
           {/* 2. カメラビューアエリア */}
           <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-zinc-950">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
-              className="w-full h-full max-h-[75vh] object-cover bg-black md:max-w-md md:rounded-2xl transition-transform duration-200"
-            />
+            {/* videoコンテナのサイズ制限と、ズーム倍率をCSS scaleで反映 */}
+            <div className="w-full h-full max-h-[75vh] md:max-w-md md:rounded-2xl overflow-hidden relative flex items-center justify-center bg-black">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                style={{ 
+                  transform: `scale(${zoomScale}) ${facingMode === 'user' ? 'scaleX(-1)' : ''}`,
+                  transition: 'transform 0.15s ease-out'
+                }}
+                className="w-full h-full object-cover bg-black"
+              />
+            </div>
 
             {loading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-950 z-30 space-y-3">
@@ -365,8 +392,18 @@ const CameraApp = ({ onClose }) => {
               </button>
             </div>
 
-            {/* 右：ダミースペース */}
-            <div className="w-14"></div>
+            {/* 右：ズーム切り替えボタン (1x, 2x, 3x) */}
+            <div className="w-14 flex justify-center">
+              <button
+                onClick={toggleZoom}
+                disabled={loading || !!error}
+                style={{ transform: `rotate(${deviceRotation}deg)` }}
+                className="w-12 h-12 flex flex-col items-center justify-center rounded-full bg-zinc-900/90 hover:bg-zinc-800 text-white border border-zinc-700/50 font-black text-xs transition-all active:scale-90 disabled:opacity-50"
+                title="ズーム倍率変更"
+              >
+                <span className="text-[10px] tracking-tight">{zoomScale.toFixed(1)}x</span>
+              </button>
+            </div>
           </div>
         </>
       )}

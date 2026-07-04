@@ -108,7 +108,7 @@ class ToDoErrorBoundary extends React.Component {
             <pre className="bg-black/40 p-4 rounded-2xl text-[10px] font-mono text-red-400 overflow-x-auto text-left max-h-36 whitespace-pre-wrap select-all border border-red-500/10">
               {this.state.error?.stack || this.state.error?.toString()}
             </pre>
-            <button 
+            <button
               onClick={() => this.setState({ hasError: false, error: null })}
               className="mt-5 w-full py-3 bg-blue-600 hover:bg-blue-700 text-white keep-white font-bold rounded-2xl transition-all text-xs active:scale-95 shadow-md shadow-blue-500/20"
             >
@@ -173,7 +173,7 @@ export default function MainApp() {
   useEffect(() => {
     try {
       localStorage.setItem('twitter_clone_timetables', JSON.stringify(timetableData));
-    } catch (e) {}
+    } catch (e) { }
 
     if (currentAccountId && firestore && Object.keys(timetableData).length > 0) {
       const docRef = doc(firestore, `users/${currentAccountId}/timetable/data`);
@@ -184,7 +184,7 @@ export default function MainApp() {
           return {};
         }
       })();
-      setDoc(docRef, { 
+      setDoc(docRef, {
         timetables: timetableData,
         colors: savedColors
       }, { merge: true }).catch(err => console.error("Failed to sync timetableData to Firestore:", err));
@@ -202,12 +202,12 @@ export default function MainApp() {
             setTimetableData(data.timetables);
             try {
               localStorage.setItem('twitter_clone_timetables', JSON.stringify(data.timetables));
-            } catch (e) {}
+            } catch (e) { }
           }
           if (data.colors) {
             try {
               localStorage.setItem('twitter_clone_lesson_colors', JSON.stringify(data.colors));
-            } catch (e) {}
+            } catch (e) { }
           }
         }
       });
@@ -317,11 +317,11 @@ export default function MainApp() {
     // リポストを展開: 各ポストのrepostsマップを確認し、リポストされたポストを複製して挿入
     const expanded = [];
     const repostInserted = new Set(); // 重複防止
-    
+
     for (const p of timelinePosts) {
       // オリジナルポストを追加
       expanded.push(p);
-      
+
       // このポストをリポストしたユーザーの情報を展開
       const reposts = (p.reposts && typeof p.reposts === 'object' && !Array.isArray(p.reposts)) ? p.reposts : {};
       for (const [userId, repostData] of Object.entries(reposts)) {
@@ -329,10 +329,10 @@ export default function MainApp() {
         const repostKey = `${p.id}_repost_${userId}`;
         if (repostInserted.has(repostKey)) continue;
         repostInserted.add(repostKey);
-        
+
         const repostTimestamp = (repostData && typeof repostData === 'object') ? repostData.timestamp : Date.now();
         const repostByName = (repostData && typeof repostData === 'object') ? repostData.name : userId;
-        
+
         expanded.push({
           ...p,
           _displayKey: repostKey,
@@ -553,7 +553,7 @@ export default function MainApp() {
       const allRoomPosts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       const userTimeline = [];
       const repostInserted = new Set();
-      
+
       for (const p of allRoomPosts) {
         // 返信ポストはプロフィール一覧には直接表示しない(本家Xの「ポスト」タブと同様に通常ポストとリポストのみ表示)
         if (p.replyTo) continue;
@@ -561,7 +561,7 @@ export default function MainApp() {
         if (p.authorId === profilePostsTargetId) {
           userTimeline.push(p);
         }
-        
+
         const reposts = (p.reposts && typeof p.reposts === 'object' && !Array.isArray(p.reposts)) ? p.reposts : {};
         if (reposts[profilePostsTargetId] && p.authorId !== profilePostsTargetId) {
           const repostData = reposts[profilePostsTargetId];
@@ -733,7 +733,7 @@ export default function MainApp() {
     setIsUpdatingProfile(true);
     try {
       const roomsToUpdate = Array.from(new Set([sanitizeRoomId("埼玉大学全体"), ...availableRooms.map(sanitizeRoomId)]));
-      
+
       await Promise.all(roomsToUpdate.map(async (room) => {
         const uRef = doc(firestore, `rooms/${room}/users/${currentAccountId}`);
         const snap = await getDoc(uRef);
@@ -803,7 +803,7 @@ export default function MainApp() {
           const checkSnap = await getDoc(checkRef);
           return checkSnap.exists();
         }));
-        
+
         if (checkResults.some(exists => exists)) {
           alert("このユーザーネームは既に使われています。");
           setIsUpdatingSettings(false);
@@ -817,7 +817,7 @@ export default function MainApp() {
         await Promise.all(rooms.map(async (room) => {
           const oldRef = doc(firestore, `rooms/${room}/users/${currentAccountId}`);
           const newRef = doc(firestore, `rooms/${room}/users/${newUserId}`);
-          
+
           const snap = await getDoc(oldRef);
           if (snap.exists()) {
             const data = snap.data();
@@ -1041,10 +1041,10 @@ export default function MainApp() {
 
   const handleDeleteAccount = async () => {
     if (!currentAccountId) return;
-    
+
     const confirm1 = window.confirm("本当にアカウントを消去しますか？\n時間割やスケジュールなどの全てのデータが完全に消去され、復旧することはできません。");
     if (!confirm1) return;
-    
+
     const confirm2 = window.confirm("本当に退会してもよろしいですか？\nこの操作は取り消せません。");
     if (!confirm2) return;
 
@@ -1052,7 +1052,7 @@ export default function MainApp() {
 
     try {
       const targetAccountId = currentAccountId;
-      
+
       // 1. 各所属部屋からユーザードキュメントを物理削除
       const roomsToDelete = Array.from(new Set([sanitizeRoomId("埼玉大学全体"), ...availableRooms.map(sanitizeRoomId)]));
       await Promise.all(roomsToDelete.map(async (room) => {
@@ -1088,7 +1088,7 @@ export default function MainApp() {
       setCurrentRoomId(sanitizeRoomId("埼玉大学全体"));
       setAvailableRooms([DEFAULT_BOARD_ROOM]);
       setTimetableData({});
-      
+
       alert("アカウントが完全に消去されました。ご利用ありがとうございました。");
     } catch (err) {
       console.error("退会処理エラー:", err);
@@ -1545,20 +1545,19 @@ export default function MainApp() {
 
   if (isAuthLoading) {
     return (
-      <div className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center transition-colors duration-300 ${
-        isDark ? 'bg-black text-white' : 'bg-white text-gray-900'
-      }`}>
+      <div className={`fixed inset-0 z-[9999] flex flex-col items-center justify-center transition-colors duration-300 ${isDark ? 'bg-black text-white' : 'bg-white text-gray-900'
+        }`}>
         {renderStyle()}
         <div className="flex flex-col items-center space-y-6 animate-fade-in">
           <div className="relative">
             <div className="absolute inset-0 bg-blue-500/25 rounded-[24px] blur-xl animate-pulse" />
-            <img 
-              src="/apple-touch-icon.png" 
-              alt="MeLink" 
-              className="w-20 h-20 relative z-10 rounded-[22px] shadow-2xl border border-white/10 transition-transform duration-500 hover:scale-105" 
+            <img
+              src="/apple-touch-icon.png"
+              alt="MeLink"
+              className="w-20 h-20 relative z-10 rounded-[22px] shadow-2xl border border-white/10 transition-transform duration-500 hover:scale-105"
             />
           </div>
-          
+
           <div className="flex flex-col items-center space-y-3">
             <h1 className="text-xl font-extrabold tracking-tight">MeLink</h1>
             <div className="flex items-center space-x-2.5">
@@ -1605,23 +1604,23 @@ export default function MainApp() {
           <div className="flex flex-col items-center mb-8 relative w-full select-none">
             <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center w-full' : 'justify-between w-full'} min-w-0`}>
               <div className="flex items-center min-w-0">
-                <img 
-                  src="/apple-touch-icon.png" 
-                  alt="MeLink" 
-                  className="w-10 h-10 flex-shrink-0 rounded-lg object-contain" 
-                  style={{ marginRight: isSidebarCollapsed ? '0' : '12px' }} 
+                <img
+                  src="/apple-touch-icon.png"
+                  alt="MeLink"
+                  className="w-10 h-10 flex-shrink-0 rounded-lg object-contain"
+                  style={{ marginRight: isSidebarCollapsed ? '0' : '12px' }}
                 />
                 {!isSidebarCollapsed && (
                   <span className={`font-extrabold text-xl tracking-tight truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>MeLink</span>
                 )}
               </div>
-              
+
               {!isSidebarCollapsed && (
                 <button
                   onClick={() => {
                     const next = !isSidebarCollapsed;
                     setIsSidebarCollapsed(next);
-                    try { localStorage.setItem('sidebar_collapsed', next.toString()); } catch (e) {}
+                    try { localStorage.setItem('sidebar_collapsed', next.toString()); } catch (e) { }
                   }}
                   className="p-1.5 rounded-full hover:bg-gray-500/10 active:scale-95 transition-all text-gray-400 hover:text-gray-200"
                   title="サイドバーを折りたたむ"
@@ -1637,13 +1636,12 @@ export default function MainApp() {
                 onClick={() => {
                   const next = !isSidebarCollapsed;
                   setIsSidebarCollapsed(next);
-                  try { localStorage.setItem('sidebar_collapsed', next.toString()); } catch (e) {}
+                  try { localStorage.setItem('sidebar_collapsed', next.toString()); } catch (e) { }
                 }}
-                className={`absolute -right-4 top-1/2 -translate-y-1/2 z-50 p-1 rounded-full border transition-all active:scale-95 shadow-md flex items-center justify-center ${
-                  isDark 
-                    ? 'bg-gray-900 border-gray-700 text-gray-300 hover:bg-gray-800' 
+                className={`absolute -right-4 top-1/2 -translate-y-1/2 z-50 p-1 rounded-full border transition-all active:scale-95 shadow-md flex items-center justify-center ${isDark
+                    ? 'bg-gray-900 border-gray-700 text-gray-300 hover:bg-gray-800'
                     : 'bg-white border-gray-250 text-gray-600 hover:bg-gray-50'
-                }`}
+                  }`}
                 title="サイドバーを展開"
               >
                 <ChevronRight size={12} />
@@ -1669,11 +1667,10 @@ export default function MainApp() {
                     setUnreadNotifsCount(0);
                   }
                 }}
-                className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'space-x-4 px-4'} py-3 rounded-2xl transition-all ${
-                  currentBottomTab === tab.id
+                className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center px-0' : 'space-x-4 px-4'} py-3 rounded-2xl transition-all ${currentBottomTab === tab.id
                     ? isDark ? 'bg-blue-900/30 text-blue-500' : 'bg-blue-100 text-blue-600'
                     : isDark ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                }`}
+                  }`}
                 title={isSidebarCollapsed ? tab.label : undefined}
               >
                 <div className="relative flex items-center justify-center">
@@ -1852,149 +1849,147 @@ export default function MainApp() {
               </div>
 
               <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="px-4 sm:px-6 mt-6 mb-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className={`p-3 rounded-full border ${isDark ? 'bg-green-900/30 text-green-400 border-green-800/50' : 'bg-green-100 text-green-600 border-green-200'}`}>
-                      <UserIcon size={24} />
-                    </div>
-                    <div>
-                      <p className={`text-[11px] font-bold mb-0.5 ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>MeLink 総登録者数</p>
-                      <p className={`text-2xl font-black tracking-tight leading-none ${isDark ? 'text-white' : 'text-[#111827]'}`}>{totalUserCount} <span className={`text-sm font-bold ${isDark ? 'text-gray-500' : 'text-[#9ca3af]'}`}>人</span></p>
+                <div className="px-4 sm:px-6 mt-6 mb-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      <div className={`p-3 rounded-full border ${isDark ? 'bg-green-900/30 text-green-400 border-green-800/50' : 'bg-green-100 text-green-600 border-green-200'}`}>
+                        <UserIcon size={24} />
+                      </div>
+                      <div>
+                        <p className={`text-[11px] font-bold mb-0.5 ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>MeLink 総登録者数</p>
+                        <p className={`text-2xl font-black tracking-tight leading-none ${isDark ? 'text-white' : 'text-[#111827]'}`}>{totalUserCount} <span className={`text-sm font-bold ${isDark ? 'text-gray-500' : 'text-[#9ca3af]'}`}>人</span></p>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="px-4 sm:px-6 mb-8 mt-4">
-                <div className="flex flex-col">
-                  <div className={`py-3.5 border-b flex items-center ${isDark ? 'border-gray-800' : 'border-[#e5e7eb]'}`}>
-                    <span className={`text-[16px] font-black tracking-tight ${isDark ? 'text-white' : 'text-[#111827]'}`}>{dateString}</span>
-                  </div>
-
-                  <div className={`py-3 border-b flex items-center ${isDark ? 'border-gray-800' : 'border-[#e5e7eb]'}`}>
-                    <div className={`pr-3 border-r ${isDark ? 'border-gray-800' : 'border-[#e5e7eb]'}`}>
-                      <span className={`text-[11px] font-bold block leading-tight ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>埼玉大学<br />大久保キャンパス</span>
+                <div className="px-4 sm:px-6 mb-8 mt-4">
+                  <div className="flex flex-col">
+                    <div className={`py-3.5 border-b flex items-center ${isDark ? 'border-gray-800' : 'border-[#e5e7eb]'}`}>
+                      <span className={`text-[16px] font-black tracking-tight ${isDark ? 'text-white' : 'text-[#111827]'}`}>{dateString}</span>
                     </div>
-                    <div className="px-4 flex items-center space-x-3">
-                      {weatherData ? (() => {
-                        const info = getWeatherInfo(weatherData.weathercode);
-                        const WeatherIcon = info.icon;
-                        return (
-                          <>
-                            <WeatherIcon size={24} className={isDark ? info.color : info.color.replace('-400', '-500')} />
-                            <div>
-                              <p className={`text-[13px] font-bold flex items-baseline space-x-1 ${isDark ? 'text-white' : 'text-[#111827]'}`}>
-                                <span className={isDark ? 'text-red-400' : 'text-red-600'}>{weatherData.maxTemp}℃</span>
-                                <span className="text-xs text-gray-500">/</span>
-                                <span className={isDark ? 'text-blue-400' : 'text-blue-600'}>{weatherData.minTemp}℃</span>
-                                <span className={`text-[10px] ml-1 ${isDark ? 'text-gray-500' : 'text-[#9ca3af]'}`}>降水 {weatherData.precipProb}%</span>
-                              </p>
-                              <p className={`text-[10px] flex items-center mt-0.5 ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>
-                                現在 {weatherData.temp}℃ ({info.text})
-                              </p>
-                            </div>
-                          </>
-                        );
-                      })() : (
-                        <div className={`text-xs flex items-center ${isDark ? 'text-gray-500' : 'text-[#9ca3af]'}`}><Loader2 size={14} className="animate-spin mr-2" /> 天気情報を取得中...</div>
-                      )}
-                    </div>
-                  </div>
 
-
-
-                  <div className="space-y-4 w-full mt-4">
-                    {[
-                      {
-                        title: '授業関連',
-                        items: [
-                          { id: 'campus_square', label: 'ｷｬﾝﾊﾟｽｽｸｴｱ', url: 'https://web.risyu.saitama-u.ac.jp/campusweb/', icon: GraduationCap, color: isDark ? 'text-indigo-400' : 'text-indigo-600', type: 'ext' },
-                          { id: 'webclass', label: 'WebClass', url: 'https://webclass.gks.saitama-u.ac.jp', icon: BookOpen, color: isDark ? 'text-teal-400' : 'text-teal-600', type: 'ext' },
-                          { id: 'web_attendance', label: 'Web出席登録', url: 'https://attendance.risyu.saitama-u.ac.jp/campusaa/', icon: CheckSquare, color: isDark ? 'text-green-400' : 'text-green-600', type: 'ext' },
-                          { id: 'web_mail', label: 'Webメール', url: 'https://outlook.office.com/mail/?realm=ms.saitama-u.ac.jp', icon: Mail, color: isDark ? 'text-blue-400' : 'text-blue-600', type: 'ext' },
-                          { id: 'websyllabus', label: 'Webシラバス', url: 'https://syllabus.risyu.saitama-u.ac.jp/syllabus/', icon: Book, color: isDark ? 'text-emerald-400' : 'text-emerald-600', type: 'ext' },
-                          { id: 'elearning', label: 'eラーニング', url: 'https://saitama-u.supereigo.com/student/main/login', icon: MonitorPlay, color: isDark ? 'text-cyan-400' : 'text-cyan-600', type: 'ext' },
-                          { id: 'homepage', label: '埼大HP', url: 'https://www.saitama-u.ac.jp/student/', icon: Globe, color: isDark ? 'text-sky-400' : 'text-sky-600', type: 'ext' }
-                        ]
-                      },
-                      {
-                        title: 'キャンパス・施設',
-                        items: [
-                          { id: 'campus-map-section', label: 'キャンパス地図', icon: Map, color: isDark ? 'text-indigo-400' : 'text-indigo-600', type: 'map' },
-                          { id: 'library', label: '図書館', url: 'https://www.lib.saitama-u.ac.jp/', icon: Library, color: isDark ? 'text-rose-400' : 'text-rose-600', type: 'ext' }
-                        ]
-                      },
-                      {
-                        title: '学生生活',
-                        items: [
-                          { id: 'bus-timetable-section', label: 'バス時刻表', icon: Bus, color: isDark ? 'text-blue-400' : 'text-blue-600', type: 'jump' },
-                          { id: 'cafeteria-section', label: '学食情報', icon: Utensils, color: isDark ? 'text-orange-400' : 'text-orange-600', type: 'jump' },
-                          { id: 'notice-section', label: '大学からのお知らせ', icon: Megaphone, color: isDark ? 'text-red-400' : 'text-red-600', type: 'notice' }
-                        ]
-                      },
-                      {
-                        title: '便利ツール',
-                        items: [
-                          { id: 'camera', label: 'カメラ', icon: Camera, color: isDark ? 'text-emerald-400' : 'text-emerald-600', type: 'camera' }
-                        ]
-                      }
-                    ].map(group => (
-                      <div 
-                        key={group.title} 
-                        className={`p-4 rounded-3xl border transition-colors duration-300 ${
-                          isDark 
-                            ? 'bg-zinc-950/40 border-zinc-900' 
-                            : 'bg-[#fafafa] border-[#f0f0f0] shadow-[0_1px_3px_rgba(0,0,0,0.02)]'
-                        }`}
-                      >
-                        <h3 className={`text-base sm:text-lg font-extrabold tracking-tight mb-3 ${isDark ? 'text-white' : 'text-[#111827]'}`}>
-                          {group.title}
-                        </h3>
-                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 lg:grid-cols-8 gap-y-5 gap-x-2 w-full place-items-start">
-                          {group.items.map(item => (
-                            <button
-                              type="button"
-                              key={item.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (item.type === 'jump') {
-                                  const el = document.getElementById(item.id);
-                                  if (el) {
-                                    const yOffset = -80;
-                                    const y = el.getBoundingClientRect().top + window.scrollY + yOffset;
-                                    window.scrollTo({ top: y, behavior: 'smooth' });
-                                  }
-                                } else if (item.type === 'map') {
-                                  setCurrentBottomTab('キャンパス地図');
-                                } else if (item.type === 'camera') {
-                                  setIsCameraOpen(true);
-                                } else if (item.type === 'notice') {
-                                  setIsNoticeOpen(true);
-                                } else if (item.type === 'ext') {
-                                  window.open(item.url, '_blank');
-                                }
-                              }}
-                              className="flex flex-col items-center justify-start w-full group transition-transform active:scale-95"
-                            >
-                              <div className={`w-14 h-14 flex items-center justify-center rounded-2xl mb-2 transition-colors border ${
-                                isDark 
-                                  ? 'bg-gray-800/80 hover:bg-gray-700 border-gray-700' 
-                                  : 'bg-[#ffffff] hover:bg-[#f9fafb] border-[#e5e7eb] shadow-sm'
-                              }`}>
-                                <item.icon size={26} className={item.color} strokeWidth={1.5} />
-                              </div>
-                              <span className={`text-[10px] sm:text-[11px] font-bold text-center leading-tight whitespace-normal break-words max-w-[64px] ${isDark ? 'text-gray-300' : 'text-[#4b5563]'}`}>
-                                {item.label}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
+                    <div className={`py-3 border-b flex items-center ${isDark ? 'border-gray-800' : 'border-[#e5e7eb]'}`}>
+                      <div className={`pr-3 border-r ${isDark ? 'border-gray-800' : 'border-[#e5e7eb]'}`}>
+                        <span className={`text-[11px] font-bold block leading-tight ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>埼玉大学<br />大久保キャンパス</span>
                       </div>
-                    ))}
-                  </div>
+                      <div className="px-4 flex items-center space-x-3">
+                        {weatherData ? (() => {
+                          const info = getWeatherInfo(weatherData.weathercode);
+                          const WeatherIcon = info.icon;
+                          return (
+                            <>
+                              <WeatherIcon size={24} className={isDark ? info.color : info.color.replace('-400', '-500')} />
+                              <div>
+                                <p className={`text-[13px] font-bold flex items-baseline space-x-1 ${isDark ? 'text-white' : 'text-[#111827]'}`}>
+                                  <span className={isDark ? 'text-red-400' : 'text-red-600'}>{weatherData.maxTemp}℃</span>
+                                  <span className="text-xs text-gray-500">/</span>
+                                  <span className={isDark ? 'text-blue-400' : 'text-blue-600'}>{weatherData.minTemp}℃</span>
+                                  <span className={`text-[10px] ml-1 ${isDark ? 'text-gray-500' : 'text-[#9ca3af]'}`}>降水 {weatherData.precipProb}%</span>
+                                </p>
+                                <p className={`text-[10px] flex items-center mt-0.5 ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>
+                                  現在 {weatherData.temp}℃ ({info.text})
+                                </p>
+                              </div>
+                            </>
+                          );
+                        })() : (
+                          <div className={`text-xs flex items-center ${isDark ? 'text-gray-500' : 'text-[#9ca3af]'}`}><Loader2 size={14} className="animate-spin mr-2" /> 天気情報を取得中...</div>
+                        )}
+                      </div>
+                    </div>
 
-                  {/* 隠しアプリ定義 (ファイル/コード内のどっかには置いておくが、UI上には表示しない)
+
+
+                    <div className="space-y-4 w-full mt-4">
+                      {[
+                        {
+                          title: '授業関連',
+                          items: [
+                            { id: 'campus_square', label: 'ｷｬﾝﾊﾟｽｽｸｴｱ', url: 'https://web.risyu.saitama-u.ac.jp/campusweb/', icon: GraduationCap, color: isDark ? 'text-indigo-400' : 'text-indigo-600', type: 'ext' },
+                            { id: 'webclass', label: 'WebClass', url: 'https://webclass.gks.saitama-u.ac.jp', icon: BookOpen, color: isDark ? 'text-teal-400' : 'text-teal-600', type: 'ext' },
+                            { id: 'web_attendance', label: 'Web出席登録', url: 'https://attendance.risyu.saitama-u.ac.jp/campusaa/', icon: CheckSquare, color: isDark ? 'text-green-400' : 'text-green-600', type: 'ext' },
+                            { id: 'web_mail', label: 'Webメール', url: 'https://outlook.office.com/mail/?realm=ms.saitama-u.ac.jp', icon: Mail, color: isDark ? 'text-blue-400' : 'text-blue-600', type: 'ext' },
+                            { id: 'websyllabus', label: 'Webシラバス', url: 'https://syllabus.risyu.saitama-u.ac.jp/syllabus/', icon: Book, color: isDark ? 'text-emerald-400' : 'text-emerald-600', type: 'ext' },
+                            { id: 'elearning', label: 'eラーニング', url: 'https://saitama-u.supereigo.com/student/main/login', icon: MonitorPlay, color: isDark ? 'text-cyan-400' : 'text-cyan-600', type: 'ext' },
+                            { id: 'homepage', label: '埼大HP', url: 'https://www.saitama-u.ac.jp/student/', icon: Globe, color: isDark ? 'text-sky-400' : 'text-sky-600', type: 'ext' }
+                          ]
+                        },
+                        {
+                          title: 'キャンパス・施設',
+                          items: [
+                            { id: 'campus-map-section', label: 'キャンパス地図', icon: Map, color: isDark ? 'text-indigo-400' : 'text-indigo-600', type: 'map' },
+                            { id: 'library', label: '図書館', url: 'https://www.lib.saitama-u.ac.jp/', icon: Library, color: isDark ? 'text-rose-400' : 'text-rose-600', type: 'ext' }
+                          ]
+                        },
+                        {
+                          title: '学生生活',
+                          items: [
+                            { id: 'bus-timetable-section', label: 'バス時刻表', icon: Bus, color: isDark ? 'text-blue-400' : 'text-blue-600', type: 'jump' },
+                            { id: 'cafeteria-section', label: '学食情報', icon: Utensils, color: isDark ? 'text-orange-400' : 'text-orange-600', type: 'jump' },
+                            { id: 'notice-section', label: '大学からのお知らせ', icon: Megaphone, color: isDark ? 'text-red-400' : 'text-red-600', type: 'notice' }
+                          ]
+                        },
+                        {
+                          title: '便利ツール',
+                          items: [
+                            { id: 'camera', label: '無音カメラ', icon: Camera, color: isDark ? 'text-emerald-400' : 'text-emerald-600', type: 'camera' }
+                          ]
+                        }
+                      ].map(group => (
+                        <div
+                          key={group.title}
+                          className={`p-4 rounded-3xl border transition-colors duration-300 ${isDark
+                              ? 'bg-zinc-950/40 border-zinc-900'
+                              : 'bg-[#fafafa] border-[#f0f0f0] shadow-[0_1px_3px_rgba(0,0,0,0.02)]'
+                            }`}
+                        >
+                          <h3 className={`text-base sm:text-lg font-extrabold tracking-tight mb-3 ${isDark ? 'text-white' : 'text-[#111827]'}`}>
+                            {group.title}
+                          </h3>
+                          <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-7 lg:grid-cols-8 gap-y-5 gap-x-2 w-full place-items-start">
+                            {group.items.map(item => (
+                              <button
+                                type="button"
+                                key={item.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (item.type === 'jump') {
+                                    const el = document.getElementById(item.id);
+                                    if (el) {
+                                      const yOffset = -80;
+                                      const y = el.getBoundingClientRect().top + window.scrollY + yOffset;
+                                      window.scrollTo({ top: y, behavior: 'smooth' });
+                                    }
+                                  } else if (item.type === 'map') {
+                                    setCurrentBottomTab('キャンパス地図');
+                                  } else if (item.type === 'camera') {
+                                    setIsCameraOpen(true);
+                                  } else if (item.type === 'notice') {
+                                    setIsNoticeOpen(true);
+                                  } else if (item.type === 'ext') {
+                                    window.open(item.url, '_blank');
+                                  }
+                                }}
+                                className="flex flex-col items-center justify-start w-full group transition-transform active:scale-95"
+                              >
+                                <div className={`w-14 h-14 flex items-center justify-center rounded-2xl mb-2 transition-colors border ${isDark
+                                    ? 'bg-gray-800/80 hover:bg-gray-700 border-gray-700'
+                                    : 'bg-[#ffffff] hover:bg-[#f9fafb] border-[#e5e7eb] shadow-sm'
+                                  }`}>
+                                  <item.icon size={26} className={item.color} strokeWidth={1.5} />
+                                </div>
+                                <span className={`text-[10px] sm:text-[11px] font-bold text-center leading-tight whitespace-normal break-words max-w-[64px] ${isDark ? 'text-gray-300' : 'text-[#4b5563]'}`}>
+                                  {item.label}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 隠しアプリ定義 (ファイル/コード内のどっかには置いておくが、UI上には表示しない)
                   _hiddenApps = [
                     { id: 'wiki-section', label: 'Wiki', icon: BookOpen, color: isDark ? 'text-teal-400' : 'text-teal-600', type: 'wiki' },
                     { id: 'power', label: '電源スポット', icon: Zap, color: isDark ? 'text-yellow-400' : 'text-yellow-600', type: 'future' },
@@ -2002,418 +1997,412 @@ export default function MainApp() {
                     { id: 'timetable', label: '友達の時間割', icon: UserPlus, color: isDark ? 'text-pink-400' : 'text-pink-600', type: 'future' },
                   ]
                   */}
-                </div>
-              </div>
-
-
-              {renderBusTimetable()}
-
-              {renderCafeteriaInfo()}
-
-              <div className="px-4 sm:px-6 mb-8 mt-4">
-                <div className="flex items-center justify-center mb-4">
-                  <div className="flex-grow h-px bg-gray-800"></div>
-                  <h2 className="px-4 text-base font-extrabold text-gray-400 tracking-widest">最新ニュース</h2>
-                  <div className="flex-grow h-px bg-gray-800"></div>
-                </div>
-                <div 
-                  onClick={() => {
-                    const shareText = "【埼大生必見】時間割・学内マップ・掲示板・バス時刻表がこれ一つに！個人情報の登録不要で今すぐ使える、埼大生のための神アプリ「MeLink」が便利すぎる🎓✨\n#埼玉大学 #埼大 #MeLink\n";
-                    const shareUrl = "https://melink.info/";
-                    if (navigator.share) {
-                      navigator.share({
-                        title: 'MeLink - 埼大生のアプリ',
-                        text: shareText,
-                        url: shareUrl,
-                      }).catch(console.error);
-                    } else {
-                      navigator.clipboard.writeText(shareText + shareUrl);
-                      showToast("リンクをコピーしました！");
-                    }
-                  }}
-                  className="bg-gray-900 rounded-3xl overflow-hidden shadow-xl border border-gray-800 cursor-pointer hover:brightness-105 hover:scale-[1.002] active:scale-[0.998] transition-all duration-200"
-                >
-                  <div className="h-40 bg-gradient-to-br from-pink-600 to-rose-900 relative flex items-center justify-center overflow-hidden">
-                    <div className="absolute inset-0 bg-black/20"></div>
-                    <div className="absolute -right-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-                    <div className="absolute -left-10 -bottom-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-
-                    <div className="relative z-10 flex space-x-4 items-end mt-12 opacity-90">
-                      <div className="w-24 h-32 bg-gray-900 rounded-t-xl shadow-xl overflow-hidden border border-gray-700">
-                        <div className="bg-rose-900 h-4 w-full"></div>
-                        <div className="p-2 space-y-1.5">
-                          <div className="w-full h-8 bg-gray-800 rounded"></div>
-                          <div className="w-2/3 h-2 bg-gray-800 rounded"></div>
-                          <div className="w-full h-2 bg-gray-800 rounded"></div>
-                        </div>
-                      </div>
-                      <div className="w-28 h-36 bg-gray-900 rounded-t-xl shadow-2xl overflow-hidden border border-gray-700 relative">
-                        <div className="bg-pink-600 h-5 w-full"></div>
-                        <div className="p-3 text-center">
-                          <div className="w-16 h-16 bg-gray-800 rounded-full mx-auto mb-2 flex items-center justify-center">
-                            <Activity size={20} className="text-gray-400" />
-                          </div>
-                          <div className="w-20 h-2 bg-gray-800 rounded mx-auto"></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="p-5 bg-gray-800">
-                    <div className="flex justify-between items-start">
-                      <div className="flex flex-col space-y-2 pr-2">
-                        <p className="text-[13px] font-bold text-white leading-relaxed">
-                          埼大マスコット「メリンちゃん」×「Link」。<br />
-                          学生同士や情報を繋ぐアプリ「MeLink」誕生！
-                        </p>
-                        <p className="text-[10px] font-bold text-gray-400 flex items-center mt-1">
-                          <ShieldCheck size={12} className="mr-1 text-green-500" />
-                          本名・メアド等、個人情報の登録は一切不要。
-                        </p>
-                      </div>
-                      <div className="bg-pink-600 text-white keep-white p-3 rounded-full flex-shrink-0 shadow-md">
-                        <ExternalLink size={18} />
-                      </div>
-                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="px-4 sm:px-6 lg:px-8">
-                <div className="flex items-center justify-center mb-4">
-                  <div className="flex-grow h-px bg-gray-800"></div>
-                  <h2 className="px-4 text-base font-extrabold text-gray-400 tracking-widest">その他</h2>
-                  <div className="flex-grow h-px bg-gray-800"></div>
-                </div>
 
-                {renderFeaturePoll()}
+                {renderBusTimetable()}
 
-                {/* 🌟 PWA追加プロンプト */}
-                {showPwaPrompt && (
-                  <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex items-start shadow-lg mb-6 relative">
-                    <button
-                      onClick={handleClosePwaPrompt}
-                      className="absolute top-3 right-3 text-gray-500 hover:text-gray-300 transition-colors"
-                    >
-                      <X size={18} />
-                    </button>
-                    <div className="flex items-center justify-center w-12 h-12 mr-3 flex-shrink-0">
-                      <div className="w-7 h-11 border-[2.5px] border-green-500 rounded-lg relative flex items-center justify-center">
-                        <div className="w-3 h-[2.5px] bg-green-500 absolute bottom-1.5 rounded-full"></div>
-                      </div>
-                    </div>
-                    <div className="pr-6">
-                      <p className="text-white font-bold text-base mb-1">ホーム画面に追加できます</p>
-                      <p className="text-gray-400 text-[13px] leading-relaxed">
-                        画面下の <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block mx-0.5 -mt-0.5"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg> をタップ→「ホーム画面に追加」
-                      </p>
-                    </div>
+                {renderCafeteriaInfo()}
+
+                <div className="px-4 sm:px-6 mb-8 mt-4">
+                  <div className="flex items-center justify-center mb-4">
+                    <div className="flex-grow h-px bg-gray-800"></div>
+                    <h2 className="px-4 text-base font-extrabold text-gray-400 tracking-widest">最新ニュース</h2>
+                    <div className="flex-grow h-px bg-gray-800"></div>
                   </div>
-                )}
-
-                <div className="flex justify-center pb-6">
                   <div
-                    onClick={() => window.open('https://twitter.com/MeLink_PR', '_blank')}
-                    className="bg-gray-900 border border-gray-800 text-white rounded-2xl p-5 flex items-center justify-between shadow-lg mb-6 active:scale-95 transition-transform cursor-pointer w-full"
+                    onClick={() => {
+                      const shareText = "【埼大生必見】時間割・学内マップ・掲示板・バス時刻表がこれ一つに！個人情報の登録不要で今すぐ使える、埼大生のための神アプリ「MeLink」が便利すぎる🎓✨\n#埼玉大学 #埼大 #MeLink\n";
+                      const shareUrl = "https://melink.info/";
+                      if (navigator.share) {
+                        navigator.share({
+                          title: 'MeLink - 埼大生のアプリ',
+                          text: shareText,
+                          url: shareUrl,
+                        }).catch(console.error);
+                      } else {
+                        navigator.clipboard.writeText(shareText + shareUrl);
+                        showToast("リンクをコピーしました！");
+                      }
+                    }}
+                    className="bg-gray-900 rounded-3xl overflow-hidden shadow-xl border border-gray-800 cursor-pointer hover:brightness-105 hover:scale-[1.002] active:scale-[0.998] transition-all duration-200"
                   >
-                    <div className="flex items-center space-x-4">
-                      <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
-                        <svg viewBox="0 0 24 24" aria-hidden="true" className="w-6 h-6 fill-current text-white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 22.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.007 3.94H5.078z"></path></svg>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-gray-400 mb-0.5">公式X (旧Twitter)</p>
-                        <p className="text-sm font-extrabold tracking-tight">@MeLink_PR をフォローして<br />最新情報をゲット！</p>
+                    <div className="h-40 bg-gradient-to-br from-pink-600 to-rose-900 relative flex items-center justify-center overflow-hidden">
+                      <div className="absolute inset-0 bg-black/20"></div>
+                      <div className="absolute -right-10 -top-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+                      <div className="absolute -left-10 -bottom-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+
+                      <div className="relative z-10 flex space-x-4 items-end mt-12 opacity-90">
+                        <div className="w-24 h-32 bg-gray-900 rounded-t-xl shadow-xl overflow-hidden border border-gray-700">
+                          <div className="bg-rose-900 h-4 w-full"></div>
+                          <div className="p-2 space-y-1.5">
+                            <div className="w-full h-8 bg-gray-800 rounded"></div>
+                            <div className="w-2/3 h-2 bg-gray-800 rounded"></div>
+                            <div className="w-full h-2 bg-gray-800 rounded"></div>
+                          </div>
+                        </div>
+                        <div className="w-28 h-36 bg-gray-900 rounded-t-xl shadow-2xl overflow-hidden border border-gray-700 relative">
+                          <div className="bg-pink-600 h-5 w-full"></div>
+                          <div className="p-3 text-center">
+                            <div className="w-16 h-16 bg-gray-800 rounded-full mx-auto mb-2 flex items-center justify-center">
+                              <Activity size={20} className="text-gray-400" />
+                            </div>
+                            <div className="w-20 h-2 bg-gray-800 rounded mx-auto"></div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <ExternalLink size={20} className="text-gray-500" />
+                    <div className="p-5 bg-gray-800">
+                      <div className="flex justify-between items-start">
+                        <div className="flex flex-col space-y-2 pr-2">
+                          <p className="text-[13px] font-bold text-white leading-relaxed">
+                            埼大マスコット「メリンちゃん」×「Link」。<br />
+                            学生同士や情報を繋ぐアプリ「MeLink」誕生！
+                          </p>
+                          <p className="text-[10px] font-bold text-gray-400 flex items-center mt-1">
+                            <ShieldCheck size={12} className="mr-1 text-green-500" />
+                            本名・メアド等、個人情報の登録は一切不要。
+                          </p>
+                        </div>
+                        <div className="bg-pink-600 text-white keep-white p-3 rounded-full flex-shrink-0 shadow-md">
+                          <ExternalLink size={18} />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
+                <div className="px-4 sm:px-6 lg:px-8">
+                  <div className="flex items-center justify-center mb-4">
+                    <div className="flex-grow h-px bg-gray-800"></div>
+                    <h2 className="px-4 text-base font-extrabold text-gray-400 tracking-widest">その他</h2>
+                    <div className="flex-grow h-px bg-gray-800"></div>
+                  </div>
+
+                  {renderFeaturePoll()}
+
+                  {/* 🌟 PWA追加プロンプト */}
+                  {showPwaPrompt && (
+                    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex items-start shadow-lg mb-6 relative">
+                      <button
+                        onClick={handleClosePwaPrompt}
+                        className="absolute top-3 right-3 text-gray-500 hover:text-gray-300 transition-colors"
+                      >
+                        <X size={18} />
+                      </button>
+                      <div className="flex items-center justify-center w-12 h-12 mr-3 flex-shrink-0">
+                        <div className="w-7 h-11 border-[2.5px] border-green-500 rounded-lg relative flex items-center justify-center">
+                          <div className="w-3 h-[2.5px] bg-green-500 absolute bottom-1.5 rounded-full"></div>
+                        </div>
+                      </div>
+                      <div className="pr-6">
+                        <p className="text-white font-bold text-base mb-1">ホーム画面に追加できます</p>
+                        <p className="text-gray-400 text-[13px] leading-relaxed">
+                          画面下の <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block mx-0.5 -mt-0.5"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" /></svg> をタップ→「ホーム画面に追加」
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-center pb-6">
+                    <div
+                      onClick={() => window.open('https://twitter.com/MeLink_PR', '_blank')}
+                      className="bg-gray-900 border border-gray-800 text-white rounded-2xl p-5 flex items-center justify-between shadow-lg mb-6 active:scale-95 transition-transform cursor-pointer w-full"
+                    >
+                      <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center flex-shrink-0">
+                          <svg viewBox="0 0 24 24" aria-hidden="true" className="w-6 h-6 fill-current text-white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 22.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.007 3.94H5.078z"></path></svg>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-gray-400 mb-0.5">公式X (旧Twitter)</p>
+                          <p className="text-sm font-extrabold tracking-tight">@MeLink_PR をフォローして<br />最新情報をゲット！</p>
+                        </div>
+                      </div>
+                      <ExternalLink size={20} className="text-gray-500" />
+                    </div>
+                  </div>
+
+                </div>
+
               </div>
-
             </div>
-          </div>
-        )}
+          )}
 
-        {/* ⚠️ キャンパス地図タブ */}
-        {currentBottomTab === 'キャンパス地図' && (
-          <CampusMapComponent isDark={isDark} isSidebarCollapsed={isSidebarCollapsed} />
-        )}
+          {/* ⚠️ キャンパス地図タブ */}
+          {currentBottomTab === 'キャンパス地図' && (
+            <CampusMapComponent isDark={isDark} isSidebarCollapsed={isSidebarCollapsed} />
+          )}
 
-        {/* ⚠️ MY時間割タブ */}
-        {currentBottomTab === 'MY時間割' && (
-          <TimetableComponent
-            firestore={firestore}
-            currentAccountId={currentAccountId}
-            currentUserProfile={currentUserProfile}
-            currentRoomId={currentRoomId}
-            formatTimeAgo={formatTimeAgo}
-            showToast={showToast}
-            openUserProfile={openUserProfile}
-            Avatar={Avatar}
-            isDark={isDark}
-            activeTimetableLesson={activeTimetableLesson}
-            clearActiveTimetableLesson={() => setActiveTimetableLesson(null)}
-            timetableData={timetableData}
-            setTimetableData={setTimetableData}
-          />
-        )}
-
-        {/* ⚠️ ToDoタブ */}
-        {currentBottomTab === 'ToDo' && (
-          <ToDoErrorBoundary isDark={isDark}>
-            <ToDoCalendarComponent 
-              isDark={isDark} 
-              timetableData={timetableData} 
+          {/* ⚠️ MY時間割タブ */}
+          {currentBottomTab === 'MY時間割' && (
+            <TimetableComponent
               firestore={firestore}
-              currentAccountId={currentAccountId}
-              onLessonSelect={(lesson) => {
-                setActiveTimetableLesson(lesson);
-              }}
-            />
-          </ToDoErrorBoundary>
-        )}
-
-        {/* ⚠️ MY時間割以外のタブで、時間割詳細モーダルのみを浮かび上がらせるポータルレンダリング */}
-        {currentBottomTab !== 'MY時間割' && activeTimetableLesson && (
-          <TimetableComponent
-            firestore={firestore}
-            currentAccountId={currentAccountId}
-            currentUserProfile={currentUserProfile}
-            currentRoomId={currentRoomId}
-            formatTimeAgo={formatTimeAgo}
-            showToast={showToast}
-            openUserProfile={openUserProfile}
-            Avatar={Avatar}
-            isDark={isDark}
-            activeTimetableLesson={activeTimetableLesson}
-            clearActiveTimetableLesson={() => setActiveTimetableLesson(null)}
-            timetableData={timetableData}
-            setTimetableData={setTimetableData}
-            onlyModal={true}
-          />
-        )}
-
-        {/* ⚠️ コミュニティ（掲示板）タブ */}
-        {currentBottomTab === 'コミュニティ' && (
-          <ErrorBoundary>
-            <CommunityComponent
-              firestore={firestore}
-              currentRoomId={currentRoomId}
               currentAccountId={currentAccountId}
               currentUserProfile={currentUserProfile}
-              isAdmin={isAdmin}
-              following={following}
-              followers={followers}
-              userBookmarks={userBookmarks}
-              expandedPostId={expandedPostId}
-              setExpandedPostId={setExpandedPostId}
-              toggleFollow={toggleFollow}
-              openUserProfile={openUserProfile}
+              currentRoomId={currentRoomId}
               formatTimeAgo={formatTimeAgo}
-              sanitizeRoomId={sanitizeRoomId}
-              VERIFIED_USERS={verifiedUsers}
-              VETERAN_USERS={veteranUsers}
-              NAMING_USERS={namingUsers}
-              setBadgeModal={setBadgeModal}
-              openFollowList={openFollowList}
-              activeTab={activeTab}
-              setActiveTab={setActiveTab}
-              viewingUserProfile={viewingUserProfile}
-              viewingProfileId={viewingProfileId}
-              viewingFollowers={viewingFollowers}
-              viewingFollowing={viewingFollowing}
-              visiblePosts={filteredPosts}
-              isLoading={isLoading}
-              postLimit={postLimit}
-              setPostLimit={setPostLimit}
-              displayedPosts={filteredPosts}
-              profilePosts={profilePosts}
-              setIsRoomModalOpen={setIsRoomModalOpen}
-              ensureRoomListed={() => addRoomToHistory(currentRoomId, currentAccountId)}
+              showToast={showToast}
+              openUserProfile={openUserProfile}
               Avatar={Avatar}
               isDark={isDark}
-              allPosts={posts}
+              activeTimetableLesson={activeTimetableLesson}
+              clearActiveTimetableLesson={() => setActiveTimetableLesson(null)}
+              timetableData={timetableData}
+              setTimetableData={setTimetableData}
             />
-          </ErrorBoundary>
-        )}
+          )}
 
-        {/* ⚠️ プロフィールタブ */}
-        {currentBottomTab === 'プロフィール' && currentUserProfile && (
-          <div className={`pb-24 min-h-screen ${isDark ? 'bg-black' : 'bg-[#fafaf9]'}`}>
-            <div className="relative">
-              <div className="h-32 sm:h-48 bg-gray-800 w-full overflow-hidden">{currentUserProfile.headerUrl ? <img src={currentUserProfile.headerUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-r from-blue-900 to-indigo-900" />}</div>
-              <div className="px-4 pb-4">
-                <div className="flex justify-between items-end -mt-12 mb-4 relative">
-                  <Avatar src={currentUserProfile.avatarUrl} name={currentUserProfile.name} color={currentUserProfile.avatarColor} size="xl" />
-                  <button onClick={() => setIsProfileModalOpen(true)} className={`px-4 py-1.5 border rounded-full text-sm font-bold transition-colors mb-2 ${isDark ? 'border-gray-700 text-white hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>プロフィールを編集</button>
-                </div>
-                <div>
-                  <h2 className={`text-xl font-black flex items-center ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                    {currentUserProfile.name}
-                    {verifiedUsers.some(u => u.toLowerCase() === (currentUserProfile.id || currentAccountId).toLowerCase()) && <BadgeCheck onClick={() => setBadgeModal({ isOpen: true, type: 'admin' })} size={20} className="text-black fill-yellow-500 ml-1 cursor-pointer" />}
-                    {veteranUsers.some(u => u.toLowerCase() === (currentUserProfile.id || currentAccountId).toLowerCase()) && <BadgeCheck onClick={() => setBadgeModal({ isOpen: true, type: 'veteran' })} size={20} className="text-black fill-blue-500 ml-1 cursor-pointer" />}
-                    {namingUsers.some(u => u.toLowerCase() === (currentUserProfile.id || currentAccountId).toLowerCase()) && <BadgeCheck onClick={() => setBadgeModal({ isOpen: true, type: 'naming' })} size={20} className="text-black fill-pink-500 ml-1 cursor-pointer" />}
-                  </h2>
-                  <p className={`${isDark ? 'text-gray-500' : 'text-gray-400'} text-sm font-bold mb-3`}>{currentUserProfile.handle}</p>
-                  <p className={`text-[15px] whitespace-pre-wrap leading-relaxed mb-3 ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{currentUserProfile.bio || '自己紹介が未設定です。'}</p>
-                  <div className={`flex items-center space-x-4 text-sm mb-4 pb-2 border-b ${isDark ? 'border-b-gray-800' : 'border-b-gray-150'}`}>
-                    <div className="flex items-center"><span className={`font-extrabold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{profilePosts.length}</span><span className={`${isDark ? 'text-gray-500' : 'text-gray-400'} font-bold`}>ポスト</span></div>
-                    <button onClick={() => openFollowList('フォロー中', following)} className="hover:underline flex items-center"><span className={`font-extrabold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{Object.keys(following || {}).length}</span><span className={`${isDark ? 'text-gray-500' : 'text-gray-400'} font-bold`}>フォロー中</span></button>
-                    <button onClick={() => openFollowList('フォロワー', followers)} className="hover:underline flex items-center"><span className={`font-extrabold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{Object.keys(followers || {}).length}</span><span className={`${isDark ? 'text-gray-500' : 'text-gray-400'} font-bold`}>フォロワー</span></button>
+          {/* ⚠️ ToDoタブ */}
+          {currentBottomTab === 'ToDo' && (
+            <ToDoErrorBoundary isDark={isDark}>
+              <ToDoCalendarComponent
+                isDark={isDark}
+                timetableData={timetableData}
+                firestore={firestore}
+                currentAccountId={currentAccountId}
+                onLessonSelect={(lesson) => {
+                  setActiveTimetableLesson(lesson);
+                }}
+              />
+            </ToDoErrorBoundary>
+          )}
+
+          {/* ⚠️ MY時間割以外のタブで、時間割詳細モーダルのみを浮かび上がらせるポータルレンダリング */}
+          {currentBottomTab !== 'MY時間割' && activeTimetableLesson && (
+            <TimetableComponent
+              firestore={firestore}
+              currentAccountId={currentAccountId}
+              currentUserProfile={currentUserProfile}
+              currentRoomId={currentRoomId}
+              formatTimeAgo={formatTimeAgo}
+              showToast={showToast}
+              openUserProfile={openUserProfile}
+              Avatar={Avatar}
+              isDark={isDark}
+              activeTimetableLesson={activeTimetableLesson}
+              clearActiveTimetableLesson={() => setActiveTimetableLesson(null)}
+              timetableData={timetableData}
+              setTimetableData={setTimetableData}
+              onlyModal={true}
+            />
+          )}
+
+          {/* ⚠️ コミュニティ（掲示板）タブ */}
+          {currentBottomTab === 'コミュニティ' && (
+            <ErrorBoundary>
+              <CommunityComponent
+                firestore={firestore}
+                currentRoomId={currentRoomId}
+                currentAccountId={currentAccountId}
+                currentUserProfile={currentUserProfile}
+                isAdmin={isAdmin}
+                following={following}
+                followers={followers}
+                userBookmarks={userBookmarks}
+                expandedPostId={expandedPostId}
+                setExpandedPostId={setExpandedPostId}
+                toggleFollow={toggleFollow}
+                openUserProfile={openUserProfile}
+                formatTimeAgo={formatTimeAgo}
+                sanitizeRoomId={sanitizeRoomId}
+                VERIFIED_USERS={verifiedUsers}
+                VETERAN_USERS={veteranUsers}
+                NAMING_USERS={namingUsers}
+                setBadgeModal={setBadgeModal}
+                openFollowList={openFollowList}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                viewingUserProfile={viewingUserProfile}
+                viewingProfileId={viewingProfileId}
+                viewingFollowers={viewingFollowers}
+                viewingFollowing={viewingFollowing}
+                visiblePosts={filteredPosts}
+                isLoading={isLoading}
+                postLimit={postLimit}
+                setPostLimit={setPostLimit}
+                displayedPosts={filteredPosts}
+                profilePosts={profilePosts}
+                setIsRoomModalOpen={setIsRoomModalOpen}
+                ensureRoomListed={() => addRoomToHistory(currentRoomId, currentAccountId)}
+                Avatar={Avatar}
+                isDark={isDark}
+                allPosts={posts}
+              />
+            </ErrorBoundary>
+          )}
+
+          {/* ⚠️ プロフィールタブ */}
+          {currentBottomTab === 'プロフィール' && currentUserProfile && (
+            <div className={`pb-24 min-h-screen ${isDark ? 'bg-black' : 'bg-[#fafaf9]'}`}>
+              <div className="relative">
+                <div className="h-32 sm:h-48 bg-gray-800 w-full overflow-hidden">{currentUserProfile.headerUrl ? <img src={currentUserProfile.headerUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-r from-blue-900 to-indigo-900" />}</div>
+                <div className="px-4 pb-4">
+                  <div className="flex justify-between items-end -mt-12 mb-4 relative">
+                    <Avatar src={currentUserProfile.avatarUrl} name={currentUserProfile.name} color={currentUserProfile.avatarColor} size="xl" />
+                    <button onClick={() => setIsProfileModalOpen(true)} className={`px-4 py-1.5 border rounded-full text-sm font-bold transition-colors mb-2 ${isDark ? 'border-gray-700 text-white hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}>プロフィールを編集</button>
+                  </div>
+                  <div>
+                    <h2 className={`text-xl font-black flex items-center ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {currentUserProfile.name}
+                      {verifiedUsers.some(u => u.toLowerCase() === (currentUserProfile.id || currentAccountId).toLowerCase()) && <BadgeCheck onClick={() => setBadgeModal({ isOpen: true, type: 'admin' })} size={20} className="text-black fill-yellow-500 ml-1 cursor-pointer" />}
+                      {veteranUsers.some(u => u.toLowerCase() === (currentUserProfile.id || currentAccountId).toLowerCase()) && <BadgeCheck onClick={() => setBadgeModal({ isOpen: true, type: 'veteran' })} size={20} className="text-black fill-blue-500 ml-1 cursor-pointer" />}
+                      {namingUsers.some(u => u.toLowerCase() === (currentUserProfile.id || currentAccountId).toLowerCase()) && <BadgeCheck onClick={() => setBadgeModal({ isOpen: true, type: 'naming' })} size={20} className="text-black fill-pink-500 ml-1 cursor-pointer" />}
+                    </h2>
+                    <p className={`${isDark ? 'text-gray-500' : 'text-gray-400'} text-sm font-bold mb-3`}>{currentUserProfile.handle}</p>
+                    <p className={`text-[15px] whitespace-pre-wrap leading-relaxed mb-3 ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{currentUserProfile.bio || '自己紹介が未設定です。'}</p>
+                    <div className={`flex items-center space-x-4 text-sm mb-4 pb-2 border-b ${isDark ? 'border-b-gray-800' : 'border-b-gray-150'}`}>
+                      <div className="flex items-center"><span className={`font-extrabold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{profilePosts.length}</span><span className={`${isDark ? 'text-gray-500' : 'text-gray-400'} font-bold`}>ポスト</span></div>
+                      <button onClick={() => openFollowList('フォロー中', following)} className="hover:underline flex items-center"><span className={`font-extrabold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{Object.keys(following || {}).length}</span><span className={`${isDark ? 'text-gray-500' : 'text-gray-400'} font-bold`}>フォロー中</span></button>
+                      <button onClick={() => openFollowList('フォロワー', followers)} className="hover:underline flex items-center"><span className={`font-extrabold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{Object.keys(followers || {}).length}</span><span className={`${isDark ? 'text-gray-500' : 'text-gray-400'} font-bold`}>フォロワー</span></button>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className={`flex border-b sticky top-[53px] z-10 px-2 py-1 space-x-1 ${isDark ? 'border-b-gray-800 bg-black/80 backdrop-blur' : 'border-b-gray-150 bg-white/80 backdrop-blur'}`}>
-                <button onClick={() => setProfileTab('posts')}
-                  className={`flex-1 py-1.5 text-sm font-semibold rounded-full transition-all duration-200 ${profileTab === 'posts'
-                    ? (isDark ? 'bg-gray-800 text-white shadow-sm' : 'bg-white text-gray-900 shadow-sm border border-gray-200')
-                    : (isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')
-                    }`}>
-                  ポスト
-                </button>
-                <button onClick={() => setProfileTab('settings')}
-                  className={`relative flex-1 py-1.5 text-sm font-semibold rounded-full transition-all duration-200 flex items-center justify-center space-x-1.5 ${profileTab === 'settings'
-                    ? (isDark ? 'bg-gray-800 text-white shadow-sm' : 'bg-white text-gray-900 shadow-sm border border-gray-200')
-                    : (isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')
-                    }`}>
-                  <Settings size={15} />
-                  <span>設定</span>
-                </button>
-              </div>
-            </div>
-            <div>
-              {profileTab === 'posts' && (() => {
-                const myPosts = profilePosts;
-                if (myPosts.length === 0 && !isLoading) return <div className={`p-10 text-center font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>ポストがありません。</div>;
-                return myPosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={verifiedUsers} VETERAN_USERS={veteranUsers} NAMING_USERS={namingUsers} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={posts} onNavigateToPost={(id) => {
-                  setCurrentBottomTab('コミュニティ');
-                  setExpandedPostId(id);
-                  setTimeout(() => {
-                    const el = document.getElementById(`post-${id}`);
-                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                  }, 150);
-                }} />);
-              })()}
-              {profileTab === 'settings' && (
-                <div className="p-4 space-y-3.5 select-none animate-[fadeIn_0.2s_ease-out]">
-                  {/* プロフィール設定 */}
-                  <button
-                    onClick={() => { setSettingsForm({ userId: currentAccountId, currentPassword: '', newPassword: '', confirmPassword: '' }); setIsSettingsModalOpen(true); }}
-                    className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98] ${
-                      isDark 
-                        ? 'bg-gray-950 border-gray-900 hover:bg-gray-900/50 text-white' 
-                        : 'bg-white border-gray-150 hover:bg-gray-50 text-gray-800 shadow-sm'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3.5">
-                      <div className={`p-2 rounded-xl ${isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
-                        <UserIcon size={18} />
-                      </div>
-                      <span className="text-sm font-extrabold">プロフィール設定</span>
-                    </div>
-                    <ChevronRight size={16} className="text-gray-500" />
+                <div className={`flex border-b sticky top-[53px] z-10 px-2 py-1 space-x-1 ${isDark ? 'border-b-gray-800 bg-black/80 backdrop-blur' : 'border-b-gray-150 bg-white/80 backdrop-blur'}`}>
+                  <button onClick={() => setProfileTab('posts')}
+                    className={`flex-1 py-1.5 text-sm font-semibold rounded-full transition-all duration-200 ${profileTab === 'posts'
+                      ? (isDark ? 'bg-gray-800 text-white shadow-sm' : 'bg-white text-gray-900 shadow-sm border border-gray-200')
+                      : (isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')
+                      }`}>
+                    ポスト
                   </button>
-
-                  {/* 利用規約 */}
-                  <button
-                    onClick={() => {
-                      setTermsModalTab('terms');
-                      setIsTermsModalOpen(true);
-                    }}
-                    className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98] ${
-                      isDark 
-                        ? 'bg-gray-950 border-gray-900 hover:bg-gray-900/50 text-white' 
-                        : 'bg-white border-gray-150 hover:bg-gray-50 text-gray-800 shadow-sm'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3.5">
-                      <div className={`p-2 rounded-xl ${isDark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
-                        <FileText size={18} />
-                      </div>
-                      <span className="text-sm font-extrabold">利用規約</span>
-                    </div>
-                    <ChevronRight size={16} className="text-gray-500" />
-                  </button>
-
-                  {/* 個人情報の取り扱いについて */}
-                  <button
-                    onClick={() => {
-                      setTermsModalTab('privacy');
-                      setIsTermsModalOpen(true);
-                    }}
-                    className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98] ${
-                      isDark 
-                        ? 'bg-gray-950 border-gray-900 hover:bg-gray-900/50 text-white' 
-                        : 'bg-white border-gray-150 hover:bg-gray-50 text-gray-800 shadow-sm'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3.5">
-                      <div className={`p-2 rounded-xl ${isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'}`}>
-                        <Lock size={18} />
-                      </div>
-                      <span className="text-sm font-extrabold">プライバシーポリシー</span>
-                    </div>
-                    <ChevronRight size={16} className="text-gray-500" />
+                  <button onClick={() => setProfileTab('settings')}
+                    className={`relative flex-1 py-1.5 text-sm font-semibold rounded-full transition-all duration-200 flex items-center justify-center space-x-1.5 ${profileTab === 'settings'
+                      ? (isDark ? 'bg-gray-800 text-white shadow-sm' : 'bg-white text-gray-900 shadow-sm border border-gray-200')
+                      : (isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')
+                      }`}>
+                    <Settings size={15} />
+                    <span>設定</span>
                   </button>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Terms Modal (ログイン後用) */}
-        <TermsModal isOpen={isTermsModalOpen} onClose={() => setIsTermsModalOpen(false)} initialTab={termsModalTab} isDark={isDark} />
-
-        {/* カメラモーダル */}
-        {isCameraOpen && (
-          <CameraApp onClose={() => setIsCameraOpen(false)} />
-        )}
-
-        {/* 大学からのお知らせモーダル */}
-        {isNoticeOpen && (
-          <UniversityNotice onClose={() => setIsNoticeOpen(false)} isDark={isDark} />
-        )}
-
-        {/* ⚠️ フッターナビゲーション (lg以下で表示) */}
-        {/* ⚠️ フッターナビゲーション (lg以下で表示) */}
-        <div className={`lg:hidden fixed bottom-0 left-0 right-0 mx-auto w-full max-w-2xl backdrop-blur flex justify-around items-center h-[60px] pb-safe z-50 ${
-          isDark 
-            ? 'bg-black/90 border-t border-gray-800 text-white' 
-            : 'bg-white/95 border-t border-gray-200 text-black shadow-[0_-2px_10px_rgba(0,0,0,0.03)]'
-        }`}>
-          {[
-            { id: 'ホーム', label: 'ホーム', icon: Home },
-            { id: 'MY時間割', label: '時間割', icon: Calendar },
-            { id: 'ToDo', label: 'ToDo', icon: CheckSquare },
-            { id: 'コミュニティ', label: '掲示板', icon: MessageCircle },
-            { id: 'プロフィール', label: 'マイページ', icon: UserIcon }
-          ].map(tab => (
-            <button key={tab.id} onClick={() => {
-              setCurrentBottomTab(tab.id);
-              if (tab.id === 'プロフィール') {
-                setLastSeenNotifTime(Date.now());
-                localStorage.setItem('last_seen_notif_time', Date.now().toString());
-                setUnreadNotifsCount(0);
-              }
-            }}
-              className="flex flex-col items-center justify-center w-full h-full gap-0.5 relative">
-              <div className={`p-1.5 rounded-xl transition-all ${
-                currentBottomTab === tab.id 
-                  ? (isDark ? 'bg-blue-900/30' : 'bg-blue-50') 
-                  : ''
-              }`}>
-                <tab.icon size={22}
-                  className={currentBottomTab === tab.id ? 'text-blue-500' : 'text-gray-500'}
-                  strokeWidth={currentBottomTab === tab.id ? 2.5 : 1.8} />
               </div>
-              <span className={`text-[10px] font-medium whitespace-nowrap ${currentBottomTab === tab.id ? 'text-blue-500' : 'text-gray-500'}`}>{tab.label}</span>
-              {tab.id === 'プロフィール' && unreadNotifsCount > 0 &&
-                <span className={`absolute top-2 right-[calc(50%-18px)] w-2.5 h-2.5 bg-red-500 border-2 rounded-full ${
-                  isDark ? 'border-black' : 'border-white'
-                }`} />}
-            </button>
-          ))}
-        </div>
+              <div>
+                {profileTab === 'posts' && (() => {
+                  const myPosts = profilePosts;
+                  if (myPosts.length === 0 && !isLoading) return <div className={`p-10 text-center font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>ポストがありません。</div>;
+                  return myPosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={verifiedUsers} VETERAN_USERS={veteranUsers} NAMING_USERS={namingUsers} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={posts} onNavigateToPost={(id) => {
+                    setCurrentBottomTab('コミュニティ');
+                    setExpandedPostId(id);
+                    setTimeout(() => {
+                      const el = document.getElementById(`post-${id}`);
+                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 150);
+                  }} />);
+                })()}
+                {profileTab === 'settings' && (
+                  <div className="p-4 space-y-3.5 select-none animate-[fadeIn_0.2s_ease-out]">
+                    {/* プロフィール設定 */}
+                    <button
+                      onClick={() => { setSettingsForm({ userId: currentAccountId, currentPassword: '', newPassword: '', confirmPassword: '' }); setIsSettingsModalOpen(true); }}
+                      className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98] ${isDark
+                          ? 'bg-gray-950 border-gray-900 hover:bg-gray-900/50 text-white'
+                          : 'bg-white border-gray-150 hover:bg-gray-50 text-gray-800 shadow-sm'
+                        }`}
+                    >
+                      <div className="flex items-center space-x-3.5">
+                        <div className={`p-2 rounded-xl ${isDark ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                          <UserIcon size={18} />
+                        </div>
+                        <span className="text-sm font-extrabold">プロフィール設定</span>
+                      </div>
+                      <ChevronRight size={16} className="text-gray-500" />
+                    </button>
+
+                    {/* 利用規約 */}
+                    <button
+                      onClick={() => {
+                        setTermsModalTab('terms');
+                        setIsTermsModalOpen(true);
+                      }}
+                      className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98] ${isDark
+                          ? 'bg-gray-950 border-gray-900 hover:bg-gray-900/50 text-white'
+                          : 'bg-white border-gray-150 hover:bg-gray-50 text-gray-800 shadow-sm'
+                        }`}
+                    >
+                      <div className="flex items-center space-x-3.5">
+                        <div className={`p-2 rounded-xl ${isDark ? 'bg-indigo-500/10 text-indigo-400' : 'bg-indigo-50 text-indigo-600'}`}>
+                          <FileText size={18} />
+                        </div>
+                        <span className="text-sm font-extrabold">利用規約</span>
+                      </div>
+                      <ChevronRight size={16} className="text-gray-500" />
+                    </button>
+
+                    {/* 個人情報の取り扱いについて */}
+                    <button
+                      onClick={() => {
+                        setTermsModalTab('privacy');
+                        setIsTermsModalOpen(true);
+                      }}
+                      className={`w-full flex items-center justify-between p-4 rounded-2xl border transition-all active:scale-[0.98] ${isDark
+                          ? 'bg-gray-950 border-gray-900 hover:bg-gray-900/50 text-white'
+                          : 'bg-white border-gray-150 hover:bg-gray-50 text-gray-800 shadow-sm'
+                        }`}
+                    >
+                      <div className="flex items-center space-x-3.5">
+                        <div className={`p-2 rounded-xl ${isDark ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-600'}`}>
+                          <Lock size={18} />
+                        </div>
+                        <span className="text-sm font-extrabold">プライバシーポリシー</span>
+                      </div>
+                      <ChevronRight size={16} className="text-gray-500" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Terms Modal (ログイン後用) */}
+          <TermsModal isOpen={isTermsModalOpen} onClose={() => setIsTermsModalOpen(false)} initialTab={termsModalTab} isDark={isDark} />
+
+          {/* カメラモーダル */}
+          {isCameraOpen && (
+            <CameraApp onClose={() => setIsCameraOpen(false)} />
+          )}
+
+          {/* 大学からのお知らせモーダル */}
+          {isNoticeOpen && (
+            <UniversityNotice onClose={() => setIsNoticeOpen(false)} isDark={isDark} />
+          )}
+
+          {/* ⚠️ フッターナビゲーション (lg以下で表示) */}
+          {/* ⚠️ フッターナビゲーション (lg以下で表示) */}
+          <div className={`lg:hidden fixed bottom-0 left-0 right-0 mx-auto w-full max-w-2xl backdrop-blur flex justify-around items-center h-[60px] pb-safe z-50 ${isDark
+              ? 'bg-black/90 border-t border-gray-800 text-white'
+              : 'bg-white/95 border-t border-gray-200 text-black shadow-[0_-2px_10px_rgba(0,0,0,0.03)]'
+            }`}>
+            {[
+              { id: 'ホーム', label: 'ホーム', icon: Home },
+              { id: 'MY時間割', label: '時間割', icon: Calendar },
+              { id: 'ToDo', label: 'ToDo', icon: CheckSquare },
+              { id: 'コミュニティ', label: '掲示板', icon: MessageCircle },
+              { id: 'プロフィール', label: 'マイページ', icon: UserIcon }
+            ].map(tab => (
+              <button key={tab.id} onClick={() => {
+                setCurrentBottomTab(tab.id);
+                if (tab.id === 'プロフィール') {
+                  setLastSeenNotifTime(Date.now());
+                  localStorage.setItem('last_seen_notif_time', Date.now().toString());
+                  setUnreadNotifsCount(0);
+                }
+              }}
+                className="flex flex-col items-center justify-center w-full h-full gap-0.5 relative">
+                <div className={`p-1.5 rounded-xl transition-all ${currentBottomTab === tab.id
+                    ? (isDark ? 'bg-blue-900/30' : 'bg-blue-50')
+                    : ''
+                  }`}>
+                  <tab.icon size={22}
+                    className={currentBottomTab === tab.id ? 'text-blue-500' : 'text-gray-500'}
+                    strokeWidth={currentBottomTab === tab.id ? 2.5 : 1.8} />
+                </div>
+                <span className={`text-[10px] font-medium whitespace-nowrap ${currentBottomTab === tab.id ? 'text-blue-500' : 'text-gray-500'}`}>{tab.label}</span>
+                {tab.id === 'プロフィール' && unreadNotifsCount > 0 &&
+                  <span className={`absolute top-2 right-[calc(50%-18px)] w-2.5 h-2.5 bg-red-500 border-2 rounded-full ${isDark ? 'border-black' : 'border-white'
+                    }`} />}
+              </button>
+            ))}
+          </div>
 
         </div>
       </div>
