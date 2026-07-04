@@ -1461,18 +1461,8 @@ export default function MainApp() {
           </a>
         </div>
 
-        <div className={`${isDark ? 'bg-gray-900 border-gray-800' : 'bg-[#ffffff] border-[#e5e7eb]'} rounded-3xl p-4 sm:p-5 lg:p-6 border shadow-xl relative overflow-hidden`}>
+        <div className={`${isDark ? 'bg-gray-900 border-gray-800' : 'bg-[#ffffff] border-[#e5e7eb]'} rounded-3xl p-4 sm:p-5 border shadow-xl relative overflow-hidden`}>
           <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-400/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-
-          <div className="flex items-center justify-between mb-3 relative z-10">
-            <span className={`text-sm font-black tracking-widest flex items-center ${isDark ? 'text-orange-400' : 'text-[#ea580c]'}`}>
-              今週(6/08-12)の100円朝食メニュー
-            </span>
-          </div>
-
-          <div className={`relative z-10 w-full rounded-2xl overflow-hidden border shadow-sm mb-4 ${isDark ? 'border-gray-700' : 'border-[#e5e7eb]'}`}>
-            <img src="/20260608-12.jpg" alt="今週の100円朝食メニュー" className="w-full h-auto object-cover" />
-          </div>
 
           <div className="flex space-x-3 relative z-10">
             <button
