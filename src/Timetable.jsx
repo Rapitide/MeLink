@@ -13,12 +13,12 @@ export default function TimetableComponent({
   const [lessonColors, setLessonColors] = useState(() => { try { return JSON.parse(localStorage.getItem('twitter_clone_lesson_colors')) || {}; } catch (e) { return {}; } });
   const [lessonNotes, setLessonNotes] = useState(() => { try { return JSON.parse(localStorage.getItem('twitter_clone_lesson_notes')) || {}; } catch (e) { return {}; } });
   const [timetables, setTimetables] = useState(() => { try { return JSON.parse(localStorage.getItem('twitter_clone_timetables')) || {}; } catch (e) { return {}; } });
-  
+
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [lessonModalTab, setLessonModalTab] = useState('talk');
   const [selectedLesson, setSelectedLesson] = useState(null);
   const [selectedTermTab, setSelectedTermTab] = useState('第1ターム');
-  
+
   const [lessonMessages, setLessonMessages] = useState([]);
   const [newLessonMessage, setNewLessonMessage] = useState('');
   const lessonTalkEndRef = useRef(null);
@@ -62,8 +62,8 @@ export default function TimetableComponent({
     }
   }, [activeTimetableLesson, clearActiveTimetableLesson, onlyModal]);
 
-  useEffect(() => { 
-    localStorage.setItem('twitter_clone_lesson_colors', JSON.stringify(lessonColors)); 
+  useEffect(() => {
+    localStorage.setItem('twitter_clone_lesson_colors', JSON.stringify(lessonColors));
     if (currentAccountId && firestore) {
       const docRef = collection(firestore, `users`);
       setDoc(doc(firestore, `users/${currentAccountId}/timetable/data`), { colors: lessonColors }, { merge: true })
@@ -82,10 +82,10 @@ export default function TimetableComponent({
   // syllabusDict がロードされた時に、既存の timetables の授業コード (code) から教室 (room) を自動補完する
   useEffect(() => {
     if (Object.keys(syllabusDict).length === 0 || Object.keys(timetables).length === 0) return;
-    
+
     let changed = false;
     const updatedTimetables = JSON.parse(JSON.stringify(timetables));
-    
+
     Object.keys(updatedTimetables).forEach(term => {
       const termTimetable = updatedTimetables[term];
       Object.keys(termTimetable).forEach(period => {
@@ -96,13 +96,13 @@ export default function TimetableComponent({
             // 全角英数字を半角大文字に正規化
             let code = lesson.code.toUpperCase().trim();
             code = code.replace(/[Ａ-Ｚａ-ｚ０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-            
+
             const syllabusRoom = syllabusDict[code]?.room;
-            const needsUpdate = !lesson.room || 
-                                lesson.room === '教室未設定' || 
-                                lesson.room === '未設定' || 
-                                lesson.room === lesson.code;
-            
+            const needsUpdate = !lesson.room ||
+              lesson.room === '教室未設定' ||
+              lesson.room === '未設定' ||
+              lesson.room === lesson.code;
+
             if (syllabusRoom && needsUpdate && lesson.room !== syllabusRoom) {
               lesson.room = syllabusRoom;
               changed = true;
@@ -117,14 +117,14 @@ export default function TimetableComponent({
           if (lesson && lesson.code) {
             let code = lesson.code.toUpperCase().trim();
             code = code.replace(/[Ａ-Ｚａ-ｚ０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-            
+
             const syllabusRoom = syllabusDict[code]?.room;
-            const needsUpdate = !lesson.room || 
-                                lesson.room === '教室未設定' || 
-                                lesson.room === '未設定' || 
-                                lesson.room === 'オンデマンド授業' ||
-                                lesson.room === lesson.code;
-            
+            const needsUpdate = !lesson.room ||
+              lesson.room === '教室未設定' ||
+              lesson.room === '未設定' ||
+              lesson.room === 'オンデマンド授業' ||
+              lesson.room === lesson.code;
+
             if (syllabusRoom && needsUpdate && lesson.room !== syllabusRoom) {
               lesson.room = syllabusRoom;
               changed = true;
@@ -184,7 +184,7 @@ export default function TimetableComponent({
 
             // 文字化けチェック（UTF-8でShift_JISを読んだ場合、またはその逆で文字化け「\uFFFD」が入るのを検出）
             const hasTrash = text.includes('\uFFFD');
-            
+
             // 日本語の曜日ヘッダー（部分一致も含む）が最低限存在するかチェック
             const hasJapaneseDays = text.includes('月') && text.includes('火');
             const hasPeriodLabel = text.includes('限');
@@ -314,7 +314,7 @@ export default function TimetableComponent({
               const day = row[0]?.trim() || '他';
               const period = row[1]?.trim() || 'その他';
               const code = row[2]?.trim().toUpperCase().replace(/[Ａ-Ｚａ-ｚ０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-              
+
               let name = row[3]?.trim() || '';
               const halfLen = name.length / 2;
               if (name.length % 2 === 0 && name.substring(0, halfLen) === name.substring(halfLen)) {
@@ -368,13 +368,13 @@ export default function TimetableComponent({
                 if (!timetable[currentPeriod][day]) {
                   timetable[currentPeriod][day] = { day, period: currentPeriod };
                 }
-                
+
                 // 全角英数字を半角大文字に正規化
                 let code = cellValue.toUpperCase();
                 code = code.replace(/[Ａ-Ｚａ-ｚ０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
-                
+
                 timetable[currentPeriod][day].code = code;
-                
+
                 // syllabusDict から room を引き当てる
                 if (syllabusDict[code]) {
                   timetable[currentPeriod][day].room = syllabusDict[code].room;
@@ -474,7 +474,7 @@ export default function TimetableComponent({
     try {
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const file = new File([blob], fileName, { type: 'text/csv' });
-      
+
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
@@ -598,15 +598,14 @@ export default function TimetableComponent({
     <>
       {/* ⚠️ サブナビゲーション用のタブバー（スワイプ切り替え用） */}
       <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-2 mb-4 flex-shrink-0">
-        <div className={`border p-1.5 flex justify-around items-center max-w-md mx-auto rounded-2xl ${
-          isDark 
-            ? 'bg-gray-900/80 border-gray-800 shadow-[0_4px_20px_rgba(0,0,0,0.4)]' 
-            : 'bg-white border-gray-200 shadow-sm'
-        }`}>
+        <div className={`border p-1.5 flex justify-around items-center max-w-md mx-auto rounded-2xl ${isDark
+          ? 'bg-gray-900/80 border-gray-800 shadow-[0_4px_20px_rgba(0,0,0,0.4)]'
+          : 'bg-white border-gray-200 shadow-sm'
+          }`}>
           {[
             { id: 0, label: 'MY時間割', icon: Calendar },
             { id: 1, label: '友達の時間割', icon: Users },
-            { id: 2, label: '埼大住民', icon: Globe }
+            { id: 2, label: '講義検索', icon: Globe }
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = activeSubTab === tab.id;
@@ -617,15 +616,13 @@ export default function TimetableComponent({
                 className="flex-1 flex flex-col items-center justify-center py-2 px-1 relative transition-colors"
               >
                 <Icon size={20} className={isActive ? (isDark ? "text-white" : "text-blue-600") : "text-gray-500"} />
-                <span className={`text-[11px] sm:text-xs mt-1 font-extrabold transition-colors ${
-                  isActive ? (isDark ? "text-white" : "text-blue-600") : "text-gray-500"
-                }`}>
+                <span className={`text-[11px] sm:text-xs mt-1 font-extrabold transition-colors ${isActive ? (isDark ? "text-white" : "text-blue-600") : "text-gray-500"
+                  }`}>
                   {tab.label}
                 </span>
                 {isActive && (
-                  <div className={`absolute bottom-0 left-[20%] right-[20%] h-[3px] rounded-full transition-all duration-300 ${
-                    isDark ? 'bg-white' : 'bg-blue-600'
-                  }`} />
+                  <div className={`absolute bottom-0 left-[20%] right-[20%] h-[3px] rounded-full transition-all duration-300 ${isDark ? 'bg-white' : 'bg-blue-600'
+                    }`} />
                 )}
               </button>
             );
@@ -634,7 +631,7 @@ export default function TimetableComponent({
       </div>
 
       {/* ⚠️ スワイプ可能なコンテナ */}
-      <div 
+      <div
         ref={containerRef}
         onScroll={handleScroll}
         className="flex overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar w-full flex-grow"
@@ -661,28 +658,26 @@ export default function TimetableComponent({
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {/* インポートボタン */}
-                <button 
-                  onClick={() => csvInputRef.current.click()} 
+                <button
+                  onClick={() => csvInputRef.current.click()}
                   title="時間割CSVをインポート（追加・更新）"
-                  className={`p-2.5 rounded-xl border transition-all active:scale-95 flex items-center justify-center h-[38px] w-[38px] ${
-                    isDark 
-                      ? 'bg-gray-900/60 border-gray-800 text-gray-300 hover:text-white hover:bg-gray-800' 
-                      : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 shadow-sm'
-                  }`}
+                  className={`p-2.5 rounded-xl border transition-all active:scale-95 flex items-center justify-center h-[38px] w-[38px] ${isDark
+                    ? 'bg-gray-900/60 border-gray-800 text-gray-300 hover:text-white hover:bg-gray-800'
+                    : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 shadow-sm'
+                    }`}
                 >
                   <Download size={18} />
                 </button>
                 <input type="file" accept=".csv" className="hidden" ref={csvInputRef} onChange={handleCsvUpload} />
 
                 {/* エクスポートボタン */}
-                <button 
-                  onClick={handleCsvExport} 
+                <button
+                  onClick={handleCsvExport}
                   title="時間割をCSVとして保存（エクスポート）"
-                  className={`p-2.5 rounded-xl border transition-all active:scale-95 flex items-center justify-center h-[38px] w-[38px] ${
-                    isDark 
-                      ? 'bg-gray-900/60 border-gray-800 text-gray-300 hover:text-white hover:bg-gray-800' 
-                      : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 shadow-sm'
-                  }`}
+                  className={`p-2.5 rounded-xl border transition-all active:scale-95 flex items-center justify-center h-[38px] w-[38px] ${isDark
+                    ? 'bg-gray-900/60 border-gray-800 text-gray-300 hover:text-white hover:bg-gray-800'
+                    : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:bg-gray-50 shadow-sm'
+                    }`}
                 >
                   <Upload size={18} />
                 </button>
@@ -806,21 +801,18 @@ export default function TimetableComponent({
 
         {/* 2. 友達の時間割 */}
         <div className="w-full shrink-0 snap-start snap-always px-4 sm:px-6 lg:px-8">
-          <div className={`border rounded-3xl p-10 text-center max-w-md mx-auto my-12 shadow-lg backdrop-blur ${
-            isDark ? 'bg-gray-900/40 border-gray-800' : 'bg-gray-50/50 border-gray-200'
-          }`}>
-            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 border animate-pulse ${
-              isDark ? 'bg-blue-950/40 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-600'
+          <div className={`border rounded-3xl p-10 text-center max-w-md mx-auto my-12 shadow-lg backdrop-blur ${isDark ? 'bg-gray-900/40 border-gray-800' : 'bg-gray-50/50 border-gray-200'
             }`}>
+            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 border animate-pulse ${isDark ? 'bg-blue-950/40 border-blue-500/20 text-blue-400' : 'bg-blue-50 border-blue-200 text-blue-600'
+              }`}>
               <Users size={36} />
             </div>
             <h3 className={`text-xl font-black mb-3 ${isDark ? 'text-white' : 'text-gray-800'}`}>友達の時間割</h3>
             <p className={`text-sm leading-relaxed mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               お友達と時間割をシェアして、空きコマの確認や授業情報の共有が簡単にできるようになる機能です。
             </p>
-            <span className={`inline-block text-xs px-4 py-2 rounded-full font-bold border ${
-              isDark ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
-            }`}>
+            <span className={`inline-block text-xs px-4 py-2 rounded-full font-bold border ${isDark ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-700 border-blue-200'
+              }`}>
               🚧 現在開発中（アップデートをお楽しみに！）
             </span>
           </div>
@@ -828,21 +820,18 @@ export default function TimetableComponent({
 
         {/* 3. 埼大住民 */}
         <div className="w-full shrink-0 snap-start snap-always px-4 sm:px-6 lg:px-8">
-          <div className={`border rounded-3xl p-10 text-center max-w-md mx-auto my-12 shadow-lg backdrop-blur ${
-            isDark ? 'bg-gray-900/40 border-gray-800' : 'bg-gray-50/50 border-gray-200'
-          }`}>
-            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 border animate-pulse ${
-              isDark ? 'bg-purple-950/40 border-purple-500/20 text-purple-400' : 'bg-purple-50 border-purple-200 text-purple-600'
+          <div className={`border rounded-3xl p-10 text-center max-w-md mx-auto my-12 shadow-lg backdrop-blur ${isDark ? 'bg-gray-900/40 border-gray-800' : 'bg-gray-50/50 border-gray-200'
             }`}>
+            <div className={`w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 border animate-pulse ${isDark ? 'bg-purple-950/40 border-purple-500/20 text-purple-400' : 'bg-purple-50 border-purple-200 text-purple-600'
+              }`}>
               <Globe size={36} />
             </div>
-            <h3 className={`text-xl font-black mb-3 ${isDark ? 'text-white' : 'text-gray-800'}`}>埼大住民</h3>
+            <h3 className={`text-xl font-black mb-3 ${isDark ? 'text-white' : 'text-gray-800'}`}>講義検索</h3>
             <p className={`text-sm leading-relaxed mb-6 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
               同じ授業を履修している埼大生や、空きコマが同じ友達を見つけて繋がることができるコミュニティ機能です。
             </p>
-            <span className={`inline-block text-xs px-4 py-2 rounded-full font-bold border ${
-              isDark ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-700 border-purple-200'
-            }`}>
+            <span className={`inline-block text-xs px-4 py-2 rounded-full font-bold border ${isDark ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-purple-50 text-purple-700 border-purple-200'
+              }`}>
               🚧 現在開発中（アップデートをお楽しみに！）
             </span>
           </div>
