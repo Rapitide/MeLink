@@ -1,8 +1,91 @@
 import React, { useState, useEffect } from 'react';
 import { X, Megaphone, ExternalLink, Loader2, RefreshCw } from 'lucide-react';
 
-const CACHE_KEY = 'su_news_cache_v2';
+const CACHE_KEY = 'su_news_cache_v3';
 const CACHE_DURATION = 10 * 60 * 1000; // キャッシュ有効期間: 10分 (ミリ秒)
+const TARGET_URL = 'https://www.saitama-u.ac.jp/';
+
+const fetchHtmlViaProxy = async () => {
+  const proxies = [
+    { url: `https://proxy.cors.sh/${TARGET_URL}`, timeout: 8000, parse: (res) => res.text() },
+    {
+      url: `https://api.allorigins.win/get?url=${encodeURIComponent(TARGET_URL)}`,
+      timeout: 10000,
+      parse: async (res) => (await res.json()).contents,
+    },
+    {
+      url: `https://corsproxy.io/?url=${encodeURIComponent(TARGET_URL)}`,
+      timeout: 5000,
+      parse: (res) => res.text(),
+    },
+  ];
+
+  for (const proxy of proxies) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), proxy.timeout);
+      const res = await fetch(proxy.url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) continue;
+
+      const htmlText = await proxy.parse(res);
+      if (htmlText && htmlText.includes('news_card')) {
+        return htmlText;
+      }
+    } catch (e) {
+      console.warn('Proxy fetch failed:', proxy.url, e);
+    }
+  }
+
+  return null;
+};
+
+const parseNewsItems = (htmlText) => {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlText, 'text/html');
+  const cards = doc.querySelectorAll('.news_card');
+  const seenUrls = new Set();
+  const newsItems = [];
+
+  cards.forEach((card, idx) => {
+    const a = card.querySelector('a');
+    if (!a) return;
+
+    const href = a.getAttribute('href') || '';
+    const url = href.startsWith('http') ? href : `https://www.saitama-u.ac.jp${href}`;
+    if (seenUrls.has(url)) return;
+    seenUrls.add(url);
+
+    const img = card.querySelector('img');
+    let imgUrl = '';
+    if (img) {
+      const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+      imgUrl = src.startsWith('http') ? src : `https://www.saitama-u.ac.jp${src}`;
+    }
+
+    const time = card.querySelector('.news_time');
+    const date = time ? time.textContent.trim().replace('[', '').replace(']', '') : '';
+
+    const catSpan = card.querySelector('.news_cat');
+    const category = catSpan ? catSpan.textContent.trim() : 'ニュース';
+
+    const titleEl = card.querySelector('.news_card--title');
+    const title = titleEl ? titleEl.textContent.trim() : '';
+    if (!title) return;
+
+    newsItems.push({
+      id: `fetched-${idx}-${url}`,
+      title,
+      date,
+      category,
+      imgUrl,
+      url,
+    });
+  });
+
+  return newsItems;
+};
 
 const UniversityNotice = ({ onClose, isDark }) => {
   const [news, setNews] = useState([]);
@@ -107,93 +190,14 @@ const UniversityNotice = ({ onClose, isDark }) => {
     }
     
     setError(null);
-    let htmlText = '';
-    let success = false;
+    const htmlText = await fetchHtmlViaProxy();
 
-    // 1. 高速な corsproxy.io をまず試す (タイムアウト3秒)
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-      const res = await fetch('https://corsproxy.io/?https://www.saitama-u.ac.jp/', {
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (res.ok) {
-        htmlText = await res.text();
-        success = true;
-      }
-    } catch (e) {
-      console.warn("corsproxy.io failed, trying allorigins:", e);
-    }
-
-    // 2. 失敗した場合は、実績のある api.allorigins.win にフォールバックする
-    if (!success) {
+    if (htmlText) {
       try {
-        const targetUrl = 'https://www.saitama-u.ac.jp/';
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒タイムアウト
-
-        const res = await fetch(proxyUrl, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const data = await res.json();
-          htmlText = data.contents;
-          success = true;
-        }
-      } catch (e) {
-        console.error("All proxies failed:", e);
-      }
-    }
-
-    // パース処理
-    if (success && htmlText) {
-      try {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(htmlText, 'text/html');
-        const cards = doc.querySelectorAll('.news_card');
-        const newsItems = [];
-
-        cards.forEach((card, idx) => {
-          const a = card.querySelector('a');
-          if (!a) return;
-
-          const href = a.getAttribute('href') || '';
-          const url = href.startsWith('http') ? href : `https://www.saitama-u.ac.jp${href}`;
-
-          const img = card.querySelector('img');
-          let imgUrl = '';
-          if (img) {
-            const src = img.getAttribute('src') || img.getAttribute('data-src') || '';
-            imgUrl = src.startsWith('http') ? src : `https://www.saitama-u.ac.jp${src}`;
-          }
-
-          const time = card.querySelector('.news_time');
-          const date = time ? time.textContent.trim().replace('[', '').replace(']', '') : '';
-
-          const catSpan = card.querySelector('.news_cat');
-          const category = catSpan ? catSpan.textContent.trim() : 'ニュース';
-
-          const titleEl = card.querySelector('.news_card--title');
-          const title = titleEl ? titleEl.textContent.trim() : '';
-
-          newsItems.push({
-            id: `fetched-${idx}-${url}`,
-            title,
-            date,
-            category,
-            imgUrl,
-            url
-          });
-        });
+        const newsItems = parseNewsItems(htmlText);
 
         if (newsItems.length > 0) {
           setNews(newsItems);
-          // 新しいデータを localStorage にキャッシュ保存 (タイムスタンプ付き)
           localStorage.setItem(CACHE_KEY, JSON.stringify({
             timestamp: Date.now(),
             items: newsItems
@@ -206,6 +210,8 @@ const UniversityNotice = ({ onClose, isDark }) => {
         if (!cacheParsed) {
           setError("データの解析に失敗しました。一時的なデータを表示します。");
           setNews(fallbackNewsData);
+        } else {
+          setError("最新データの取得に失敗したため、前回のキャッシュを表示しています。");
         }
       }
     } else {
