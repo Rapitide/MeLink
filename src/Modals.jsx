@@ -77,9 +77,9 @@ export const RoomModal = ({ isOpen, availableRooms, currentRoomId, isAdmin, onSw
             ))}
           </div>
           <div className="pt-4 border-t border-gray-800">
-            <p className="text-xs text-gray-500 mb-3">一覧にない掲示板は、名前（合言葉）を入力して作成できます。</p>
+            <p className="text-xs text-gray-500 mb-3">一覧にない掲示板は、新しい掲示板タイトルを入力して作成できます。</p>
             <form onSubmit={onCreateRoom} className="space-y-3">
-              <div className="relative border border-gray-700 rounded-xl focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden bg-gray-900"><div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><Hash size={18} /></div><input type="text" placeholder="新しい掲示板名（合言葉）" className="w-full p-3 pl-10 bg-transparent outline-none text-white placeholder-gray-500" value={newRoomForm} onChange={e => setNewRoomForm(e.target.value)} /></div>
+              <div className="relative border border-gray-700 rounded-xl focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 overflow-hidden bg-gray-900"><div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><Hash size={18} /></div><input type="text" placeholder="新しい掲示板タイトル" className="w-full p-3 pl-10 bg-transparent outline-none text-white placeholder-gray-500" value={newRoomForm} onChange={e => setNewRoomForm(e.target.value)} /></div>
               <button type="submit" disabled={!newRoomForm.trim()} className="w-full bg-blue-600 disabled:opacity-50 text-white keep-white font-bold py-3 rounded-full transition-colors hover:bg-blue-700">作成して移動</button>
             </form>
           </div>
@@ -96,21 +96,17 @@ export const ProfileEditModal = ({ isOpen, onClose, onUpdate, isUpdating, editFo
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className={`w-full max-w-lg rounded-2xl overflow-hidden shadow-xl border transition-colors ${
-        isDark ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
-      }`} onClick={e => e.stopPropagation()}>
-        <div className={`flex items-center justify-between px-4 py-2 border-b ${
-          isDark ? 'border-gray-800' : 'border-gray-150'
-        }`}>
+      <div className={`w-full max-w-lg rounded-2xl overflow-hidden shadow-xl border transition-colors ${isDark ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
+        }`} onClick={e => e.stopPropagation()}>
+        <div className={`flex items-center justify-between px-4 py-2 border-b ${isDark ? 'border-gray-800' : 'border-gray-150'
+          }`}>
           <div className="flex items-center">
-            <button onClick={onClose} className={`p-2 -ml-2 mr-4 rounded-full transition-colors ${
-              isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
-            }`}><X size={20} /></button>
+            <button onClick={onClose} className={`p-2 -ml-2 mr-4 rounded-full transition-colors ${isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+              }`}><X size={20} /></button>
             <h2 className="text-lg font-bold">プロフィールを編集</h2>
           </div>
-          <button onClick={onUpdate} disabled={isUpdating} className={`px-4 py-1.5 font-bold rounded-full text-sm flex items-center disabled:opacity-50 transition-all ${
-            isDark ? 'bg-white text-black hover:bg-gray-200' : 'bg-gray-900 text-white hover:bg-gray-800'
-          }`}>
+          <button onClick={onUpdate} disabled={isUpdating} className={`px-4 py-1.5 font-bold rounded-full text-sm flex items-center disabled:opacity-50 transition-all ${isDark ? 'bg-white text-black hover:bg-gray-200' : 'bg-gray-900 text-white hover:bg-gray-800'
+            }`}>
             {isUpdating && <Loader2 size={16} className={`animate-spin mr-1.5 ${isDark ? 'text-black' : 'text-white'}`} />}
             保存
           </button>
@@ -127,15 +123,13 @@ export const ProfileEditModal = ({ isOpen, onClose, onUpdate, isUpdating, editFo
             <input type="file" ref={avatarInputRef} className="hidden" accept="image/png, image/jpeg, image/gif, image/webp" onChange={e => onImageChange(e, 'avatar')} />
           </div>
           <div className="pt-16 space-y-4">
-            <div className={`border rounded-md p-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 mt-2 ${
-              isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-            }`}>
+            <div className={`border rounded-md p-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 mt-2 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+              }`}>
               <label className={`block text-xs px-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>ニックネーム</label>
               <input type="text" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} className={`w-full bg-transparent outline-none px-1 py-1 ${isDark ? 'text-white' : 'text-gray-900'}`} required />
             </div>
-            <div className={`border rounded-md p-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 ${
-              isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-            }`}>
+            <div className={`border rounded-md p-2 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+              }`}>
               <label className={`block text-xs px-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>自己紹介</label>
               <textarea value={editForm.bio} onChange={e => setEditForm({ ...editForm, bio: e.target.value })} className={`w-full bg-transparent outline-none px-1 py-1 h-24 resize-none placeholder-gray-500 ${isDark ? 'text-white' : 'text-gray-900'}`} placeholder="自己紹介を追加" />
             </div>
@@ -174,30 +168,26 @@ export const ProfileSettingsModal = ({ isOpen, onClose, onUpdateSettings, isUpda
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className={`w-full max-w-md rounded-2xl overflow-hidden shadow-xl border animate-[fadeIn_0.18s_ease-out] transition-colors ${
-        isDark ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
-      }`} onClick={e => e.stopPropagation()}>
-        
+      <div className={`w-full max-w-md rounded-2xl overflow-hidden shadow-xl border animate-[fadeIn_0.18s_ease-out] transition-colors ${isDark ? 'bg-gray-900 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
+        }`} onClick={e => e.stopPropagation()}>
+
         {/* --- 1. メインメニュービュー --- */}
         {activeView === 'menu' && (
           <>
-            <div className={`flex items-center justify-between px-4 py-3.5 border-b ${
-              isDark ? 'border-gray-800' : 'border-gray-150'
-            }`}>
+            <div className={`flex items-center justify-between px-4 py-3.5 border-b ${isDark ? 'border-gray-800' : 'border-gray-150'
+              }`}>
               <h2 className="text-base font-extrabold">プロフィール設定</h2>
-              <button onClick={onClose} className={`p-1.5 rounded-full transition-colors active:scale-95 ${
-                isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
-              }`}><X size={18} /></button>
+              <button onClick={onClose} className={`p-1.5 rounded-full transition-colors active:scale-95 ${isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                }`}><X size={18} /></button>
             </div>
             <div className="p-5 space-y-3">
               {/* ユーザーネームの変更 */}
               <button
                 onClick={() => setActiveView('username')}
-                className={`w-full flex items-center justify-between p-4 rounded-xl border font-bold text-sm transition-all active:scale-[0.98] ${
-                  isDark 
-                    ? 'bg-gray-950 border-gray-900 hover:bg-gray-800/40 text-white' 
-                    : 'bg-white border-gray-150 hover:bg-gray-50 text-gray-800 shadow-sm'
-                }`}
+                className={`w-full flex items-center justify-between p-4 rounded-xl border font-bold text-sm transition-all active:scale-[0.98] ${isDark
+                  ? 'bg-gray-950 border-gray-900 hover:bg-gray-800/40 text-white'
+                  : 'bg-white border-gray-150 hover:bg-gray-50 text-gray-800 shadow-sm'
+                  }`}
               >
                 <span>ユーザーネームの変更</span>
                 <ChevronRight size={16} className="text-gray-500" />
@@ -206,11 +196,10 @@ export const ProfileSettingsModal = ({ isOpen, onClose, onUpdateSettings, isUpda
               {/* パスワードの変更 */}
               <button
                 onClick={() => setActiveView('password')}
-                className={`w-full flex items-center justify-between p-4 rounded-xl border font-bold text-sm transition-all active:scale-[0.98] ${
-                  isDark 
-                    ? 'bg-gray-950 border-gray-900 hover:bg-gray-800/40 text-white' 
-                    : 'bg-white border-gray-150 hover:bg-gray-50 text-gray-800 shadow-sm'
-                }`}
+                className={`w-full flex items-center justify-between p-4 rounded-xl border font-bold text-sm transition-all active:scale-[0.98] ${isDark
+                  ? 'bg-gray-950 border-gray-900 hover:bg-gray-800/40 text-white'
+                  : 'bg-white border-gray-150 hover:bg-gray-50 text-gray-800 shadow-sm'
+                  }`}
               >
                 <span>パスワードの変更</span>
                 <ChevronRight size={16} className="text-gray-500" />
@@ -219,11 +208,10 @@ export const ProfileSettingsModal = ({ isOpen, onClose, onUpdateSettings, isUpda
               {/* アカウント消去 */}
               <button
                 onClick={() => setActiveView('delete')}
-                className={`w-full flex items-center justify-between p-4 rounded-xl border font-bold text-sm transition-all active:scale-[0.98] ${
-                  isDark 
-                    ? 'bg-gray-950 border-gray-900 hover:bg-red-950/20 hover:border-red-900/30 text-white' 
-                    : 'bg-white border-gray-150 hover:bg-red-50/30 hover:border-red-200 text-gray-800 shadow-sm'
-                }`}
+                className={`w-full flex items-center justify-between p-4 rounded-xl border font-bold text-sm transition-all active:scale-[0.98] ${isDark
+                  ? 'bg-gray-950 border-gray-900 hover:bg-red-950/20 hover:border-red-900/30 text-white'
+                  : 'bg-white border-gray-150 hover:bg-red-50/30 hover:border-red-200 text-gray-800 shadow-sm'
+                  }`}
               >
                 <span className={isDark ? 'text-red-400' : 'text-red-600'}>アカウント消去</span>
                 <ChevronRight size={16} className={isDark ? 'text-red-500/70' : 'text-red-500'} />
@@ -235,26 +223,22 @@ export const ProfileSettingsModal = ({ isOpen, onClose, onUpdateSettings, isUpda
         {/* --- 2. ユーザーネーム変更ビュー --- */}
         {activeView === 'username' && (
           <form onSubmit={handleSaveUsername}>
-            <div className={`flex items-center justify-between px-4 py-3.5 border-b ${
-              isDark ? 'border-gray-800' : 'border-gray-150'
-            }`}>
+            <div className={`flex items-center justify-between px-4 py-3.5 border-b ${isDark ? 'border-gray-800' : 'border-gray-150'
+              }`}>
               <div className="flex items-center">
-                <button type="button" onClick={handleBack} className={`p-1.5 -ml-1 mr-3 rounded-full transition-colors active:scale-95 ${
-                  isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
-                }`}><ArrowLeft size={18} /></button>
+                <button type="button" onClick={handleBack} className={`p-1.5 -ml-1 mr-3 rounded-full transition-colors active:scale-95 ${isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                  }`}><ArrowLeft size={18} /></button>
                 <h2 className="text-base font-extrabold">ユーザーネームの変更</h2>
               </div>
-              <button type="submit" disabled={isUpdating} className={`px-4.5 py-1.5 font-bold rounded-full text-xs flex items-center disabled:opacity-50 transition-all active:scale-95 ${
-                isDark ? 'bg-white text-black hover:bg-gray-200' : 'bg-gray-900 text-white hover:bg-gray-800'
-              }`}>
+              <button type="submit" disabled={isUpdating} className={`px-4.5 py-1.5 font-bold rounded-full text-xs flex items-center disabled:opacity-50 transition-all active:scale-95 ${isDark ? 'bg-white text-black hover:bg-gray-200' : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}>
                 {isUpdating && <Loader2 size={12} className={`animate-spin mr-1.5 ${isDark ? 'text-black' : 'text-white'}`} />}
                 保存
               </button>
             </div>
             <div className="p-5 space-y-4">
-              <div className={`border rounded-lg p-2.5 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 ${
-                isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-              }`}>
+              <div className={`border rounded-lg p-2.5 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                }`}>
                 <label className={`block text-xxs font-bold mb-0.5 px-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>新しいユーザーID (@ユーザーID)</label>
                 <input type="text" value={settingsForm.userId} onChange={e => setSettingsForm({ ...settingsForm, userId: e.target.value.toLowerCase().replace(/\s/g, '') })} placeholder="英数字のみ" className={`w-full bg-transparent outline-none px-1 py-0.5 text-sm ${isDark ? 'text-white' : 'text-gray-900'}`} required />
               </div>
@@ -265,38 +249,32 @@ export const ProfileSettingsModal = ({ isOpen, onClose, onUpdateSettings, isUpda
         {/* --- 3. パスワードの変更ビュー --- */}
         {activeView === 'password' && (
           <form onSubmit={handleSavePassword}>
-            <div className={`flex items-center justify-between px-4 py-3.5 border-b ${
-              isDark ? 'border-gray-800' : 'border-gray-150'
-            }`}>
+            <div className={`flex items-center justify-between px-4 py-3.5 border-b ${isDark ? 'border-gray-800' : 'border-gray-150'
+              }`}>
               <div className="flex items-center">
-                <button type="button" onClick={handleBack} className={`p-1.5 -ml-1 mr-3 rounded-full transition-colors active:scale-95 ${
-                  isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
-                }`}><ArrowLeft size={18} /></button>
+                <button type="button" onClick={handleBack} className={`p-1.5 -ml-1 mr-3 rounded-full transition-colors active:scale-95 ${isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                  }`}><ArrowLeft size={18} /></button>
                 <h2 className="text-base font-extrabold">パスワードの変更</h2>
               </div>
-              <button type="submit" disabled={isUpdating} className={`px-4.5 py-1.5 font-bold rounded-full text-xs flex items-center disabled:opacity-50 transition-all active:scale-95 ${
-                isDark ? 'bg-white text-black hover:bg-gray-200' : 'bg-gray-900 text-white hover:bg-gray-800'
-              }`}>
+              <button type="submit" disabled={isUpdating} className={`px-4.5 py-1.5 font-bold rounded-full text-xs flex items-center disabled:opacity-50 transition-all active:scale-95 ${isDark ? 'bg-white text-black hover:bg-gray-200' : 'bg-gray-900 text-white hover:bg-gray-800'
+                }`}>
                 {isUpdating && <Loader2 size={12} className={`animate-spin mr-1.5 ${isDark ? 'text-black' : 'text-white'}`} />}
                 保存
               </button>
             </div>
             <div className="p-5 space-y-4">
-              <div className={`border rounded-lg p-2.5 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 ${
-                isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-              }`}>
+              <div className={`border rounded-lg p-2.5 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                }`}>
                 <label className={`block text-xxs font-bold mb-0.5 px-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>現在のパスワード</label>
                 <input type="password" value={settingsForm.currentPassword || ''} onChange={e => setSettingsForm({ ...settingsForm, currentPassword: e.target.value })} placeholder="現在のパスワードを入力" className={`w-full bg-transparent outline-none px-1 py-0.5 text-sm ${isDark ? 'text-white' : 'text-gray-900'}`} required />
               </div>
-              <div className={`border rounded-lg p-2.5 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 ${
-                isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-              }`}>
+              <div className={`border rounded-lg p-2.5 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                }`}>
                 <label className={`block text-xxs font-bold mb-0.5 px-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>新しいパスワード (半角英数字のみ)</label>
                 <input type="password" value={settingsForm.newPassword || ''} onChange={e => setSettingsForm({ ...settingsForm, newPassword: e.target.value })} placeholder="新しいパスワードを入力" className={`w-full bg-transparent outline-none px-1 py-0.5 text-sm ${isDark ? 'text-white' : 'text-gray-900'}`} required />
               </div>
-              <div className={`border rounded-lg p-2.5 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 ${
-                isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-              }`}>
+              <div className={`border rounded-lg p-2.5 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 ${isDark ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                }`}>
                 <label className={`block text-xxs font-bold mb-0.5 px-1 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>新しいパスワード (確認)</label>
                 <input type="password" value={settingsForm.confirmPassword || ''} onChange={e => setSettingsForm({ ...settingsForm, confirmPassword: e.target.value })} placeholder="確認のためもう一度入力" className={`w-full bg-transparent outline-none px-1 py-0.5 text-sm ${isDark ? 'text-white' : 'text-gray-900'}`} required />
               </div>
@@ -307,18 +285,15 @@ export const ProfileSettingsModal = ({ isOpen, onClose, onUpdateSettings, isUpda
         {/* --- 4. アカウント消去ビュー --- */}
         {activeView === 'delete' && (
           <>
-            <div className={`flex items-center px-4 py-3.5 border-b ${
-              isDark ? 'border-gray-800' : 'border-gray-150'
-            }`}>
-              <button onClick={handleBack} className={`p-1.5 -ml-1 mr-3 rounded-full transition-colors active:scale-95 ${
-                isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
-              }`}><ArrowLeft size={18} /></button>
+            <div className={`flex items-center px-4 py-3.5 border-b ${isDark ? 'border-gray-800' : 'border-gray-150'
+              }`}>
+              <button onClick={handleBack} className={`p-1.5 -ml-1 mr-3 rounded-full transition-colors active:scale-95 ${isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+                }`}><ArrowLeft size={18} /></button>
               <h2 className="text-base font-extrabold text-red-500">アカウント消去</h2>
             </div>
             <div className="p-5 space-y-5">
-              <div className={`p-4 rounded-xl border flex items-start space-x-3 text-left ${
-                isDark ? 'bg-red-950/20 border-red-900/40 text-red-400' : 'bg-red-50 border-red-200 text-red-700'
-              }`}>
+              <div className={`p-4 rounded-xl border flex items-start space-x-3 text-left ${isDark ? 'bg-red-950/20 border-red-900/40 text-red-400' : 'bg-red-50 border-red-200 text-red-700'
+                }`}>
                 <AlertTriangle size={20} className="flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-extrabold text-sm mb-1">危険な操作：この操作は取り消せません</h3>
@@ -460,19 +435,17 @@ export const TermsModal = ({ isOpen, onClose, initialTab = 'terms', isDark = tru
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className={`w-full max-w-md rounded-3xl p-6 relative flex flex-col max-h-[80vh] border shadow-2xl animate-[fadeIn_0.18s_ease-out] transition-colors ${
-        isDark ? 'bg-gray-950 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
-      }`} onClick={e => e.stopPropagation()}>
-        
+      <div className={`w-full max-w-md rounded-3xl p-6 relative flex flex-col max-h-[80vh] border shadow-2xl animate-[fadeIn_0.18s_ease-out] transition-colors ${isDark ? 'bg-gray-950 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-900'
+        }`} onClick={e => e.stopPropagation()}>
+
         {/* ヘッダー */}
         <div className="flex justify-between items-center mb-4 shrink-0">
           <h2 className={`text-base font-black tracking-tight flex items-center gap-1.5 ${isDark ? 'text-gray-100' : 'text-gray-900'}`}>
             <span>{emoji}</span>
             <span>{title}</span>
           </h2>
-          <button onClick={onClose} className={`p-1.5 rounded-full transition-colors active:scale-95 ${
-            isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
-          }`}>
+          <button onClick={onClose} className={`p-1.5 rounded-full transition-colors active:scale-95 ${isDark ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+            }`}>
             <X size={18} />
           </button>
         </div>
@@ -487,12 +460,11 @@ export const TermsModal = ({ isOpen, onClose, initialTab = 'terms', isDark = tru
             )}
           </div>
         </div>
-        
+
         {/* フッター */}
         <div className={`pt-3 border-t shrink-0 ${isDark ? 'border-gray-800' : 'border-gray-200'}`}>
-          <button onClick={onClose} className={`w-full py-2 active:scale-[0.98] transition-all rounded-full font-black text-xs ${
-            isDark ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
-          }`}>
+          <button onClick={onClose} className={`w-full py-2 active:scale-[0.98] transition-all rounded-full font-black text-xs ${isDark ? 'bg-gray-800 hover:bg-gray-700 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+            }`}>
             内容を確認しました
           </button>
         </div>

@@ -1927,7 +1927,7 @@ export default function MainApp() {
                           items: [
                             { id: 'bus-timetable-section', label: 'バス時刻表', icon: Bus, color: isDark ? 'text-blue-400' : 'text-blue-600', type: 'jump' },
                             { id: 'cafeteria-section', label: '学食情報', icon: Utensils, color: isDark ? 'text-orange-400' : 'text-orange-600', type: 'jump' },
-                            { id: 'notice-section', label: '大学からのお知らせ', icon: Megaphone, color: isDark ? 'text-red-400' : 'text-red-600', type: 'notice' }
+                            { id: 'notice-section', label: 'お知らせ', icon: Megaphone, color: isDark ? 'text-red-400' : 'text-red-600', type: 'notice' }
                           ]
                         },
                         {
@@ -1993,7 +1993,7 @@ export default function MainApp() {
                   _hiddenApps = [
                     { id: 'wiki-section', label: 'Wiki', icon: BookOpen, color: isDark ? 'text-teal-400' : 'text-teal-600', type: 'wiki' },
                     { id: 'power', label: '電源スポット', icon: Zap, color: isDark ? 'text-yellow-400' : 'text-yellow-600', type: 'future' },
-                    { id: 'notice', label: '大学からのお知らせ', icon: Megaphone, color: isDark ? 'text-red-400' : 'text-red-600', type: 'future' },
+                    { id: 'notice', label: 'お知らせ', icon: Megaphone, color: isDark ? 'text-red-400' : 'text-red-600', type: 'future' },
                     { id: 'timetable', label: '友達の時間割', icon: UserPlus, color: isDark ? 'text-pink-400' : 'text-pink-600', type: 'future' },
                   ]
                   */}
@@ -2228,6 +2228,8 @@ export default function MainApp() {
                 Avatar={Avatar}
                 isDark={isDark}
                 allPosts={posts}
+                onSwitchRoom={switchRoom}
+                availableRooms={availableRooms}
               />
             </ErrorBoundary>
           )}

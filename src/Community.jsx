@@ -4,12 +4,13 @@ import { Heart, MessageCircle, Bookmark, Pin, Trash2, CheckCircle, BadgeCheck, B
 
 const EmojiPicker = React.lazy(() => import('emoji-picker-react'));
 
-const renderTextWithLinks = (text) => {
+const renderTextWithLinks = (text, onSwitchRoom, isDark, availableRooms = []) => {
   if (!text) return null;
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = text.split(urlRegex);
+  const regex = /(https?:\/\/[^\s]+|#[^\s#]+)/g;
+  const parts = text.split(regex);
   return parts.map((part, index) => {
-    if (part.match(urlRegex)) {
+    if (!part) return null;
+    if (part.match(/^https?:\/\/[^\s]+/)) {
       return (
         <a 
           key={index} 
@@ -23,8 +24,205 @@ const renderTextWithLinks = (text) => {
         </a>
       );
     }
+
+    if (part.startsWith('#')) {
+      let rawName = part.slice(1).trim();
+      if (!rawName) return part;
+
+      let matchedRoom = null;
+      let suffix = '';
+
+      if (availableRooms && availableRooms.length > 0) {
+        const sortedRooms = [...availableRooms].sort((a, b) => b.length - a.length);
+        for (const room of sortedRooms) {
+          if (rawName === room) {
+            matchedRoom = room;
+            suffix = '';
+            break;
+          } else if (rawName.startsWith(room)) {
+            matchedRoom = room;
+            suffix = rawName.slice(room.length);
+            break;
+          }
+        }
+      }
+
+      if (!matchedRoom) {
+        const cleanMatch = rawName.match(/^(.+?)([。、！？!?\s]*)$/);
+        if (cleanMatch) {
+          matchedRoom = cleanMatch[1];
+          suffix = cleanMatch[2];
+        } else {
+          matchedRoom = rawName;
+          suffix = '';
+        }
+      }
+
+      return (
+        <React.Fragment key={index}>
+          <span
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onSwitchRoom) {
+                onSwitchRoom(matchedRoom);
+              }
+            }}
+            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded text-xs font-extrabold select-none cursor-pointer transition-all duration-150 align-baseline ${
+              isDark
+                ? 'bg-[#3c4270]/70 hover:bg-[#484f8f] text-[#c9cdfb] border border-[#52599c]/50'
+                : 'bg-[#5865f2]/15 hover:bg-[#5865f2]/25 text-[#4752c4] border border-[#5865f2]/30'
+            }`}
+            title={`「${matchedRoom}」掲示板へ移動`}
+          >
+            <span className="opacity-75 font-black text-[11px]">#</span>
+            <span>{matchedRoom}</span>
+          </span>
+          {suffix}
+        </React.Fragment>
+      );
+    }
     return part;
   });
+};
+
+const MentionTextarea = ({
+  value,
+  onChange,
+  onKeyDown,
+  placeholder,
+  className,
+  rows = 3,
+  availableRooms = [],
+  isDark = false,
+  autoFocus = false
+}) => {
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionQuery, setSuggestionQuery] = useState('');
+  const [mentionStartIndex, setMentionStartIndex] = useState(-1);
+  const textareaRef = useRef(null);
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleInputChange = (e) => {
+    const newValue = e.target.value;
+    onChange(newValue);
+    checkMention(newValue, e.target.selectionStart);
+  };
+
+  const handleCursorMove = (e) => {
+    checkMention(value, e.target.selectionStart);
+  };
+
+  const checkMention = (text, cursorPos) => {
+    if (!text || cursorPos === undefined) {
+      setShowSuggestions(false);
+      return;
+    }
+
+    const textBeforeCursor = text.slice(0, cursorPos);
+    const lastHashPos = textBeforeCursor.lastIndexOf('#');
+
+    if (lastHashPos !== -1) {
+      const textAfterHash = textBeforeCursor.slice(lastHashPos + 1);
+      if (!textAfterHash.includes('\n') && textAfterHash.length < 25) {
+        setMentionStartIndex(lastHashPos);
+        setSuggestionQuery(textAfterHash);
+        setShowSuggestions(true);
+        return;
+      }
+    }
+
+    setShowSuggestions(false);
+  };
+
+  const filteredRooms = useMemo(() => {
+    if (!showSuggestions) return [];
+    const query = suggestionQuery.trim().toLowerCase();
+    const list = availableRooms && availableRooms.length > 0 ? availableRooms : ['埼玉大学全体'];
+    const uniqueRooms = Array.from(new Set(list));
+    if (!query) return uniqueRooms;
+    return uniqueRooms.filter(r => r.toLowerCase().includes(query));
+  }, [availableRooms, suggestionQuery, showSuggestions]);
+
+  const selectRoom = (roomName) => {
+    if (mentionStartIndex === -1 || !textareaRef.current) return;
+    const cursorPos = textareaRef.current.selectionStart;
+    const before = value.slice(0, mentionStartIndex);
+    const after = value.slice(cursorPos);
+    
+    const inserted = `#${roomName} `;
+    const updatedValue = before + inserted + after;
+    onChange(updatedValue);
+    setShowSuggestions(false);
+
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        const newCursorPos = before.length + inserted.length;
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 10);
+  };
+
+  return (
+    <div className="relative w-full" ref={containerRef}>
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={handleInputChange}
+        onKeyUp={handleCursorMove}
+        onClick={handleCursorMove}
+        onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        rows={rows}
+        className={className}
+        autoFocus={autoFocus}
+      />
+      {showSuggestions && filteredRooms.length > 0 && (
+        <div className={`absolute left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-xl border shadow-2xl backdrop-blur-md p-1.5 transition-all ${
+          isDark 
+            ? 'bg-gray-900/95 border-gray-700 text-white' 
+            : 'bg-white/95 border-gray-200 text-gray-900'
+        }`}>
+          <div className={`text-[10px] font-extrabold px-2.5 py-1 mb-1 tracking-wider uppercase ${
+            isDark ? 'text-gray-400' : 'text-gray-500'
+          }`}>
+            掲示板を選択
+          </div>
+          {filteredRooms.map((room) => (
+            <div
+              key={room}
+              onClick={(e) => {
+                e.stopPropagation();
+                selectRoom(room);
+              }}
+              className={`flex items-center space-x-2 px-2.5 py-2 rounded-lg cursor-pointer text-sm font-semibold transition-colors ${
+                isDark 
+                  ? 'hover:bg-blue-600/30 hover:text-blue-300 text-gray-200' 
+                  : 'hover:bg-blue-50 hover:text-blue-600 text-gray-800'
+              }`}
+            >
+              <span className={`px-1.5 py-0.5 rounded text-xs font-black ${
+                isDark ? 'bg-gray-800 text-blue-400' : 'bg-blue-100 text-blue-600'
+              }`}>
+                #
+              </span>
+              <span className="truncate">{room}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export const PostItem = ({
@@ -32,7 +230,8 @@ export const PostItem = ({
   isAdmin, following, userBookmarks, expandedPostId, setExpandedPostId,
   toggleFollow, openUserProfile, formatTimeAgo, sanitizeRoomId,
   VERIFIED_USERS, VETERAN_USERS, NAMING_USERS, setBadgeModal, Avatar,
-  isDark, allPosts, onNavigateToPost, isReplyThreadItem = false
+  isDark, allPosts, onNavigateToPost, isReplyThreadItem = false,
+  onSwitchRoom, availableRooms
 }) => {
   const [replyContent, setReplyContent] = useState('');
   const [isReplying, setIsReplying] = useState(false);
@@ -380,7 +579,7 @@ export const PostItem = ({
                 返信先: <span className="text-blue-500 hover:underline cursor-pointer" onClick={(e) => { e.stopPropagation(); openUserProfile(p.replyToAuthorId, { name: p.replyToAuthor || '名無し' }); }}>@{p.replyToAuthorId}</span>
               </div>
             )}
-            <p className={`mt-1 whitespace-pre-wrap break-words text-[15px] leading-normal ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{renderTextWithLinks(p.content)}</p>
+            <p className={`mt-1 whitespace-pre-wrap break-words text-[15px] leading-normal ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{renderTextWithLinks(p.content, onSwitchRoom, isDark, availableRooms)}</p>
 
             {/* 引用プレビューカードの描画 */}
             {p.quoteTo && (
@@ -403,7 +602,7 @@ export const PostItem = ({
                       <span className={`text-[13px] ${isDark ? 'text-gray-500' : 'text-gray-500'} truncate`}>@{quotedPost.authorId}</span>
                       <span className={`text-[13px] ${isDark ? 'text-gray-500' : 'text-gray-500'} whitespace-nowrap`}>· {formatTimeAgo(quotedPost.timestamp)}</span>
                     </div>
-                    <p className={`mt-1.5 text-[14px] leading-normal break-words whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{renderTextWithLinks(quotedPost.content)}</p>
+                    <p className={`mt-1.5 text-[14px] leading-normal break-words whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{renderTextWithLinks(quotedPost.content, onSwitchRoom, isDark, availableRooms)}</p>
                   </div>
                 ) : (
                   <div className={`border rounded-2xl p-3 text-xs italic ${isDark ? 'border-[#2f3336] text-gray-500 bg-gray-950/20' : 'border-[#cfd9de] text-gray-400 bg-gray-50/20'}`}>このポストは削除されました</div>
@@ -673,6 +872,8 @@ export const PostItem = ({
                         allPosts={allPosts}
                         onNavigateToPost={onNavigateToPost}
                         isReplyThreadItem={true}
+                        onSwitchRoom={onSwitchRoom}
+                        availableRooms={availableRooms}
                       />
                     ))}
                   </div>
@@ -680,10 +881,10 @@ export const PostItem = ({
                 {/* 返信ポスト入力フォーム */}
                 <form onSubmit={e => handleReply(p.id, e)} className="flex space-x-3 mt-4 items-end ml-[-52px]">
                   <Avatar src={currentUserProfile.avatarUrl} name={currentUserProfile.name} color={currentUserProfile.avatarColor} size="md" />
-                  <textarea
+                  <MentionTextarea
                     placeholder="返信をポスト"
                     value={replyContent}
-                    onChange={e => setReplyContent(e.target.value)}
+                    onChange={setReplyContent}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -691,6 +892,8 @@ export const PostItem = ({
                       }
                     }}
                     rows={1}
+                    availableRooms={availableRooms}
+                    isDark={isDark}
                     className={`flex-grow bg-transparent py-2 text-sm outline-none placeholder-gray-500 resize-none min-h-[38px] max-h-28 overflow-y-auto leading-5 ${isDark ? 'text-white' : 'text-gray-900'}`}
                   />
                   <button type="submit" disabled={!replyContent.trim() || isReplying} className={`font-bold text-sm px-3 py-1.5 rounded-full text-blue-500 ${isDark ? 'hover:bg-blue-900/20' : 'hover:bg-blue-50'} disabled:opacity-50 transition-colors flex items-center`}>
@@ -715,11 +918,13 @@ export const PostItem = ({
               </div>
               
               <form onSubmit={handleQuoteRepost} className="space-y-4">
-                <textarea
+                <MentionTextarea
                   placeholder="コメントを追加"
                   value={quoteComment}
-                  onChange={e => setQuoteComment(e.target.value)}
+                  onChange={setQuoteComment}
                   rows={3}
+                  availableRooms={availableRooms}
+                  isDark={isDark}
                   className={`w-full bg-transparent resize-none outline-none text-base leading-relaxed ${isDark ? 'text-white placeholder-gray-500' : 'text-gray-900 placeholder-gray-400'}`}
                   autoFocus
                 />
@@ -732,7 +937,7 @@ export const PostItem = ({
                     <span className={`text-[13px] ${isDark ? 'text-gray-500' : 'text-gray-500'} truncate`}>@{p.authorId}</span>
                     <span className={`text-[13px] ${isDark ? 'text-gray-500' : 'text-gray-500'} whitespace-nowrap`}>· {formatTimeAgo(p.timestamp)}</span>
                   </div>
-                  <p className={`mt-1.5 text-[14px] leading-normal break-words whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{p.content}</p>
+                  <p className={`mt-1.5 text-[14px] leading-normal break-words whitespace-pre-wrap ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{renderTextWithLinks(p.content, onSwitchRoom, isDark, availableRooms)}</p>
                 </div>
                 
                 <div className="flex justify-end pt-2">
@@ -762,7 +967,7 @@ export default function CommunityComponent({
   activeTab, setActiveTab, viewingUserProfile, viewingProfileId,
   viewingFollowers, viewingFollowing, visiblePosts, isLoading,
   postLimit, setPostLimit, displayedPosts, profilePosts = [], setIsRoomModalOpen, ensureRoomListed, Avatar,
-  isDark, allPosts
+  isDark, allPosts, onSwitchRoom, availableRooms
 }) {
   const [newPostContent, setNewPostContent] = useState('');
   const [showPoll, setShowPoll] = useState(false);
@@ -852,7 +1057,7 @@ export default function CommunityComponent({
               {(() => {
                 const userPosts = profilePosts;
                 if (userPosts.length === 0) return <div className={`p-10 text-center font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>ポストがありません</div>;
-                return userPosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={VERIFIED_USERS} VETERAN_USERS={VETERAN_USERS} NAMING_USERS={NAMING_USERS} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={allPosts} onNavigateToPost={(id) => {
+                return userPosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={VERIFIED_USERS} VETERAN_USERS={VETERAN_USERS} NAMING_USERS={NAMING_USERS} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={allPosts} onSwitchRoom={onSwitchRoom} availableRooms={availableRooms} onNavigateToPost={(id) => {
                   setExpandedPostId(id);
                   setTimeout(() => {
                     const el = document.getElementById(`post-${id}`);
@@ -869,7 +1074,15 @@ export default function CommunityComponent({
         <div className={`p-4 border-b flex space-x-3 ${isDark ? 'border-gray-800 bg-black' : 'border-gray-150 bg-white'}`}>
           <div className="flex-shrink-0 cursor-pointer" onClick={() => openUserProfile(currentAccountId)}><Avatar src={currentUserProfile.avatarUrl} name={currentUserProfile.name} color={currentUserProfile.avatarColor} /></div>
           <div className="flex-grow">
-            <textarea value={newPostContent} onChange={e => setNewPostContent(e.target.value)} placeholder={showPoll ? "質問を聞いてみよう" : "いまどうしてる？"} className={`w-full bg-transparent text-xl outline-none min-h-[60px] resize-none py-1 placeholder-gray-500 ${isDark ? 'text-white' : 'text-gray-900'}`} />
+            <MentionTextarea
+              value={newPostContent}
+              onChange={setNewPostContent}
+              placeholder={showPoll ? "質問を聞いてみよう" : "いまどうしてる？"}
+              rows={3}
+              availableRooms={availableRooms}
+              isDark={isDark}
+              className={`w-full bg-transparent text-xl outline-none min-h-[60px] resize-none py-1 placeholder-gray-500 ${isDark ? 'text-white' : 'text-gray-900'}`}
+            />
 
             {showPoll && (
               <div className={`border rounded-xl p-3 mb-3 ${isDark ? 'border-gray-800 bg-gray-900/50' : 'border-gray-200 bg-gray-50'}`}>
@@ -907,7 +1120,7 @@ export default function CommunityComponent({
       {activeTab !== 'プロフィール' && (
       <div>
         {visiblePosts.length === 0 && !isLoading && <div className={`p-10 text-center font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>表示できるポストがありません</div>}
-        {visiblePosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={VERIFIED_USERS} VETERAN_USERS={VETERAN_USERS} NAMING_USERS={NAMING_USERS} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={allPosts} onNavigateToPost={(id) => {
+        {visiblePosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={VERIFIED_USERS} VETERAN_USERS={VETERAN_USERS} NAMING_USERS={NAMING_USERS} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={allPosts} onSwitchRoom={onSwitchRoom} availableRooms={availableRooms} onNavigateToPost={(id) => {
           setExpandedPostId(id);
           setTimeout(() => {
             const el = document.getElementById(`post-${id}`);
