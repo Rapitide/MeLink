@@ -1,4 +1,4 @@
-import React, { useState, useMemo, Suspense, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, Suspense, useRef, useEffect } from 'react';
 import { doc, setDoc, updateDoc, deleteDoc, collection, addDoc, deleteField } from 'firebase/firestore';
 import { Heart, MessageCircle, Bookmark, Pin, Trash2, CheckCircle, BadgeCheck, BarChart2, Loader2, Plus, ArrowLeft, Repeat, Smile } from 'lucide-react';
 
