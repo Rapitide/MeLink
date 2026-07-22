@@ -85,7 +85,7 @@ const renderTextWithLinks = (text, onSwitchRoom, isDark, availableRooms = []) =>
   });
 };
 
-const MentionTextarea = ({
+const MentionTextarea = React.memo(function MentionTextarea({
   value,
   onChange,
   onKeyDown,
@@ -95,83 +95,84 @@ const MentionTextarea = ({
   availableRooms = [],
   isDark = false,
   autoFocus = false
-}) => {
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestionQuery, setSuggestionQuery] = useState('');
-  const [mentionStartIndex, setMentionStartIndex] = useState(-1);
+}) {
+  // { show, query, startIndex } をまとめて1つのstateで管理 → setState呼び出し回数を削減
+  const [mentionState, setMentionState] = useState({ show: false, query: '', startIndex: -1 });
   const textareaRef = useRef(null);
   const containerRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
-        setShowSuggestions(false);
+        setMentionState(s => s.show ? { ...s, show: false } : s);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleInputChange = (e) => {
-    const newValue = e.target.value;
-    onChange(newValue);
-    checkMention(newValue, e.target.selectionStart);
-  };
-
-  const handleCursorMove = (e) => {
-    checkMention(value, e.target.selectionStart);
-  };
-
-  const checkMention = (text, cursorPos) => {
+  const checkMention = useCallback((text, cursorPos) => {
     if (!text || cursorPos === undefined) {
-      setShowSuggestions(false);
+      setMentionState(s => s.show ? { show: false, query: '', startIndex: -1 } : s);
       return;
     }
-
     const textBeforeCursor = text.slice(0, cursorPos);
     const lastHashPos = textBeforeCursor.lastIndexOf('#');
-
     if (lastHashPos !== -1) {
       const textAfterHash = textBeforeCursor.slice(lastHashPos + 1);
       if (!textAfterHash.includes('\n') && textAfterHash.length < 25) {
-        setMentionStartIndex(lastHashPos);
-        setSuggestionQuery(textAfterHash);
-        setShowSuggestions(true);
+        setMentionState(s =>
+          s.show && s.query === textAfterHash && s.startIndex === lastHashPos
+            ? s  // 変化なければ更新しない
+            : { show: true, query: textAfterHash, startIndex: lastHashPos }
+        );
         return;
       }
     }
+    setMentionState(s => s.show ? { show: false, query: '', startIndex: -1 } : s);
+  }, []);
 
-    setShowSuggestions(false);
-  };
+  const handleInputChange = useCallback((e) => {
+    const newValue = e.target.value;
+    onChange(newValue);
+    checkMention(newValue, e.target.selectionStart);
+  }, [onChange, checkMention]);
+
+  // クリック時のカーソル位置チェック（onKeyUpは削除して二重呼び出し防止）
+  const handleClick = useCallback((e) => {
+    checkMention(e.target.value, e.target.selectionStart);
+  }, [checkMention]);
 
   const filteredRooms = useMemo(() => {
-    if (!showSuggestions) return [];
-    const query = suggestionQuery.trim().toLowerCase();
+    if (!mentionState.show) return [];
+    const query = mentionState.query.trim().toLowerCase();
     const list = availableRooms && availableRooms.length > 0 ? availableRooms : ['埼玉大学全体'];
     const uniqueRooms = Array.from(new Set(list));
     if (!query) return uniqueRooms;
     return uniqueRooms.filter(r => r.toLowerCase().includes(query));
-  }, [availableRooms, suggestionQuery, showSuggestions]);
+  }, [availableRooms, mentionState.show, mentionState.query]);
 
-  const selectRoom = (roomName) => {
-    if (mentionStartIndex === -1 || !textareaRef.current) return;
+  const selectRoom = useCallback((roomName) => {
+    if (!textareaRef.current) return;
     const cursorPos = textareaRef.current.selectionStart;
-    const before = value.slice(0, mentionStartIndex);
-    const after = value.slice(cursorPos);
-    
-    const inserted = `#${roomName} `;
-    const updatedValue = before + inserted + after;
-    onChange(updatedValue);
-    setShowSuggestions(false);
-
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        const newCursorPos = before.length + inserted.length;
-        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
-      }
-    }, 10);
-  };
+    setMentionState(s => {
+      if (s.startIndex === -1) return s;
+      const before = value.slice(0, s.startIndex);
+      const after = value.slice(cursorPos);
+      const inserted = `#${roomName} `;
+      const updatedValue = before + inserted + after;
+      onChange(updatedValue);
+      const newCursorPos = before.length + inserted.length;
+      // フォーカス・カーソル移動はマイクロタスクで実行
+      Promise.resolve().then(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+        }
+      });
+      return { show: false, query: '', startIndex: -1 };
+    });
+  }, [value, onChange]);
 
   return (
     <div className="relative w-full" ref={containerRef}>
@@ -179,16 +180,15 @@ const MentionTextarea = ({
         ref={textareaRef}
         value={value}
         onChange={handleInputChange}
-        onKeyUp={handleCursorMove}
-        onClick={handleCursorMove}
+        onClick={handleClick}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         rows={rows}
         className={className}
         autoFocus={autoFocus}
       />
-      {showSuggestions && filteredRooms.length > 0 && (
-        <div className={`absolute left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-xl border shadow-2xl backdrop-blur-md p-1.5 transition-all ${
+      {mentionState.show && filteredRooms.length > 0 && (
+        <div className={`absolute left-0 right-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-xl border shadow-2xl backdrop-blur-md p-1.5 ${
           isDark 
             ? 'bg-gray-900/95 border-gray-700 text-white' 
             : 'bg-white/95 border-gray-200 text-gray-900'
@@ -201,8 +201,9 @@ const MentionTextarea = ({
           {filteredRooms.map((room) => (
             <div
               key={room}
-              onClick={(e) => {
-                e.stopPropagation();
+              onMouseDown={(e) => {
+                // onMouseDownでfocusが外れる前に選択（onClickよりも先に発火）
+                e.preventDefault();
                 selectRoom(room);
               }}
               className={`flex items-center space-x-2 px-2.5 py-2 rounded-lg cursor-pointer text-sm font-semibold transition-colors ${
@@ -223,16 +224,16 @@ const MentionTextarea = ({
       )}
     </div>
   );
-};
+});
 
-export const PostItem = ({
+export const PostItem = React.memo(function PostItem({
   p, firestore, currentRoomId, currentAccountId, currentUserProfile,
   isAdmin, following, userBookmarks, expandedPostId, setExpandedPostId,
   toggleFollow, openUserProfile, formatTimeAgo, sanitizeRoomId,
   VERIFIED_USERS, VETERAN_USERS, NAMING_USERS, setBadgeModal, Avatar,
   isDark, allPosts, onNavigateToPost, isReplyThreadItem = false,
   onSwitchRoom, availableRooms
-}) => {
+}) {
   const [replyContent, setReplyContent] = useState('');
   const [isReplying, setIsReplying] = useState(false);
   const [showRepostMenu, setShowRepostMenu] = useState(false);
@@ -957,7 +958,8 @@ export const PostItem = ({
       </div>
     );
   } catch (e) { return null; }
-};
+});
+
 
 export default function CommunityComponent({
   firestore, currentRoomId, currentAccountId, currentUserProfile,
