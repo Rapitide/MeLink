@@ -523,8 +523,8 @@ export const PostItem = React.memo(function PostItem({
           isDark ? 'border-gray-800' : 'border-gray-150'
         } ${
           p.isGlobalPinned 
-            ? (isDark ? 'bg-yellow-900/20 hover:bg-yellow-900/30' : 'bg-yellow-50 hover:bg-yellow-100/50') 
-            : (isReplyThreadItem ? 'bg-transparent hover:bg-gray-50/5 dark:hover:bg-gray-950/5' : (isDark ? 'bg-black hover:bg-gray-900' : 'bg-white hover:bg-gray-50'))
+            ? (isDark ? 'bg-yellow-900/20' : 'bg-yellow-50') 
+            : (isReplyThreadItem ? 'bg-transparent' : (isDark ? 'bg-black' : 'bg-white'))
         } ${isReplyThreadItem ? 'border-none pb-1 pt-1' : ''}`} 
         onClick={() => setExpandedPostId(expandedPostId === p.id ? null : p.id)}
         style={{ zIndex: (showEmojiPalette || showAllEmojiPicker || showRepostMenu || isQuoteModalOpen) ? 50 : 1 }}
@@ -562,17 +562,20 @@ export const PostItem = React.memo(function PostItem({
             <Avatar src={authorAvatarUrl} name={authorName} color={authorColor} />
           </div>
           <div className="flex-grow min-w-0">
-            <div className="flex items-center justify-between min-w-0">
-              <div className="flex items-center space-x-1.5 truncate">
-                <div className="flex items-center space-x-1.5 truncate cursor-pointer" onClick={(e) => { e.stopPropagation(); openUserProfile(p.authorId, { name: authorName, avatarUrl: authorAvatarUrl, avatarColor: authorColor }); }}>
-                  <span className={`font-bold truncate hover:underline flex items-center ${isDark ? 'text-white' : 'text-gray-900'}`}>{authorName}{(VERIFIED_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'admin' }); }} size={16} className="text-black fill-yellow-500 ml-1 flex-shrink-0 cursor-pointer" />}{(VETERAN_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'veteran' }); }} size={16} className="text-black fill-blue-500 ml-1 flex-shrink-0 cursor-pointer" />}{(NAMING_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'naming' }); }} size={16} className="text-black fill-pink-500 ml-1 flex-shrink-0 cursor-pointer" />}</span>
-                  <span className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-sm truncate max-w-[80px] sm:max-w-none`}>@{p.authorId}</span><span className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-sm whitespace-nowrap`}>· {formatTimeAgo(p.timestamp)}</span>
+            <div className="flex items-center justify-between min-w-0 gap-1">
+              {/* 左側：名前＋認証バッジ（truncate可）、ユーザー名・日付（省略可） */}
+              <div className="flex items-center min-w-0 flex-1">
+                <div className="flex items-center min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); openUserProfile(p.authorId, { name: authorName, avatarUrl: authorAvatarUrl, avatarColor: authorColor }); }}>
+                  <span className={`font-bold truncate hover:underline flex items-center flex-shrink-0 max-w-[120px] sm:max-w-[200px] ${isDark ? 'text-white' : 'text-gray-900'}`}>{authorName}{(VERIFIED_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'admin' }); }} size={16} className="text-black fill-yellow-500 ml-1 flex-shrink-0 cursor-pointer" />}{(VETERAN_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'veteran' }); }} size={16} className="text-black fill-blue-500 ml-1 flex-shrink-0 cursor-pointer" />}{(NAMING_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'naming' }); }} size={16} className="text-black fill-pink-500 ml-1 flex-shrink-0 cursor-pointer" />}</span>
+                  <span className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-sm ml-1 hidden sm:inline truncate max-w-[80px]`}>@{p.authorId}</span>
+                  <span className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-sm ml-1 whitespace-nowrap hidden xs:inline`}>· {formatTimeAgo(p.timestamp)}</span>
                 </div>
-                {p.authorId !== currentAccountId && <button onClick={(e) => toggleFollow(p.authorId, e)} className={`ml-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold border transition-colors whitespace-nowrap flex-shrink-0 ${isFollowing ? (isDark ? 'border-gray-600 text-white hover:border-red-500/50 hover:text-red-400 hover:bg-red-900/30 bg-transparent' : 'border-gray-300 text-gray-700 hover:border-red-500/50 hover:text-red-500 hover:bg-red-50 bg-transparent') : (isDark ? 'bg-white text-black border-white hover:bg-gray-200' : 'bg-gray-900 text-white border-gray-900 hover:bg-gray-800')}`}>{isFollowing ? 'フォロー中' : 'フォロー'}</button>}
               </div>
-              <div className="flex items-center text-gray-500 flex-shrink-0">
+              {/* 右側：フォローボタン（常に表示）＋管理系ボタン */}
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {p.authorId !== currentAccountId && <button onClick={(e) => toggleFollow(p.authorId, e)} className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold border transition-colors whitespace-nowrap flex-shrink-0 ${isFollowing ? (isDark ? 'border-gray-600 text-white hover:border-red-500/50 hover:text-red-400 hover:bg-red-900/30 bg-transparent' : 'border-gray-300 text-gray-700 hover:border-red-500/50 hover:text-red-500 hover:bg-red-50 bg-transparent') : (isDark ? 'bg-white text-black border-white hover:bg-gray-200' : 'bg-gray-900 text-white border-gray-900 hover:bg-gray-800')}`}>{isFollowing ? 'フォロー中' : 'フォロー'}</button>}
                 {isAdmin && <button onClick={e => toggleGlobalPin(p, e)} className={`p-1.5 rounded-full ${isDark ? 'hover:bg-yellow-900/30 text-gray-500 hover:text-yellow-500' : 'hover:bg-yellow-100 text-gray-400 hover:text-yellow-500'} transition-colors ${p.isGlobalPinned ? 'text-yellow-500' : ''}`} title="公式ピン留め"><Pin size={16} className={p.isGlobalPinned ? 'fill-current' : ''} /></button>}
-                {(p.authorId === currentAccountId || isAdmin) && <button onClick={e => handleDelete(p, e)} className={`p-1.5 rounded-full ${isDark ? 'hover:bg-red-900/30 text-gray-500 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'} transition-colors ml-1`}><Trash2 size={16} /></button>}
+                {(p.authorId === currentAccountId || isAdmin) && <button onClick={e => handleDelete(p, e)} className={`p-1.5 rounded-full ${isDark ? 'hover:bg-red-900/30 text-gray-500 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'} transition-colors`}><Trash2 size={16} /></button>}
               </div>
             </div>
             {p.replyTo && p.replyToAuthor && (

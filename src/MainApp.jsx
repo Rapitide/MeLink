@@ -16,6 +16,8 @@ import TimetableComponent from './Timetable';
 import ToDoCalendarComponent from './ToDoCalendar';
 import CameraApp from './CameraApp';
 import UniversityNotice from './UniversityNotice';
+import MinamiyonoBusGuide from './features/minamiyonoBus/MinamiyonoBusGuide';
+import CampusDepartureBusGuide from './features/campusDepartureBus/CampusDepartureBusGuide';
 import { VERIFIED_USERS, VETERAN_USERS, NAMING_USERS, LESSON_COLORS, DEFAULT_LESSON_COLOR, getLessonColor, getWeatherInfo, formatTimeAgo, sanitizeRoomId, isValidId, compressImage, parseCSV, Avatar, SPOTS, LEVELS, FEATURE_POLL_OPTIONS, encodeFirestoreFieldKey } from './utils';
 
 const DEFAULT_BOARD_ROOM = sanitizeRoomId('埼玉大学全体');
@@ -262,6 +264,7 @@ export default function MainApp() {
   const [showCongestion, setShowCongestion] = useState(false);
   const [busData, setBusData] = useState(null);
   const [activeBusRouteIndex, setActiveBusRouteIndex] = useState(0);
+  const [selectedBusPanel, setSelectedBusPanel] = useState(null);
   const busCarouselRef = useRef(null);
   const [cafeteriaTab, setCafeteriaTab] = useState(null);
 
@@ -1270,175 +1273,96 @@ export default function MainApp() {
 
   const renderBusTimetable = () => {
     if (!busData) return null;
-
-    const now = currentTime;
-    const day = now.getDay();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const dateStr = `${yyyy}-${mm}-${dd}`;
-    const holidays = busData._meta?.holidays || [];
-    const isHoliday = day === 0 || holidays.includes(dateStr);
-
-    let dayTypeStr = '平日';
-    if (isHoliday) { dayTypeStr = '日・祝'; }
-    else if (day === 6) { dayTypeStr = '土曜'; }
+    const panelTitle = selectedBusPanel === 'campus-bound'
+      ? '埼玉大学方面バス'
+      : selectedBusPanel === 'campus-departure'
+        ? '埼大発バス'
+        : 'バス時刻表';
 
     return (
       <div id="bus-timetable-section" className="px-4 sm:px-6 lg:px-8 mb-8 mt-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">
-            <h2 className={`text-base sm:text-lg font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-[#111827]'}`}>埼大発バス時刻表</h2>
+            {selectedBusPanel && (
+              <button
+                type="button"
+                onClick={() => setSelectedBusPanel(null)}
+                className={`mr-1 rounded-full border p-2 transition-colors active:scale-95 ${isDark ? 'border-gray-800 bg-gray-900 text-gray-200 hover:bg-gray-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-100'}`}
+                aria-label="バス時刻表メニューへ戻る"
+              >
+                <ArrowLeft size={16} />
+              </button>
+            )}
+            <h2 className={`text-base sm:text-lg font-extrabold tracking-tight ${isDark ? 'text-white' : 'text-[#111827]'}`}>{panelTitle}</h2>
           </div>
         </div>
 
-        <div className={`${isDark ? 'bg-gray-900 border-gray-800' : 'bg-[#ffffff] border-[#e5e7eb]'} rounded-3xl p-4 sm:p-5 lg:p-6 border shadow-xl relative overflow-hidden`}>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-
-          <div className={`flex justify-between items-center mb-5 border-b pb-4 relative z-10 ${isDark ? 'border-gray-800' : 'border-[#e5e7eb]'}`}>
-            <div className="flex flex-col">
-              <span className={`text-[10px] font-bold mb-0.5 ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>現在時刻</span>
-              <span className={`text-2xl font-black tracking-tight leading-none ${isDark ? 'text-white' : 'text-[#111827]'}`}>{now.getHours().toString().padStart(2, '0')}:{now.getMinutes().toString().padStart(2, '0')}</span>
-            </div>
-            <div className={`px-4 py-2 rounded-xl border flex items-center shadow-inner ${isDark ? 'bg-gray-800 border-gray-700' : 'bg-[#f9fafb] border-[#e5e7eb]'}`}>
-              <span className={`text-xs font-bold mr-1 ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>今日は</span>
-              <span className={`text-sm font-black mx-1 ${isHoliday ? (isDark ? 'text-red-400' : 'text-red-500') : day === 6 ? (isDark ? 'text-blue-400' : 'text-blue-600') : (isDark ? 'text-green-400' : 'text-green-600')}`}>{dayTypeStr}</span>
-              <span className={`text-xs font-bold ml-1 ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>ダイヤです</span>
-            </div>
-          </div>
-
-          <div
-            ref={busCarouselRef}
-            className="flex overflow-x-auto snap-x snap-mandatory relative z-10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] -mx-1"
-            onScroll={(e) => {
-              const scrollLeft = e.target.scrollLeft;
-              const width = e.target.offsetWidth;
-              const index = Math.round(scrollLeft / width);
-              if (index !== activeBusRouteIndex) setActiveBusRouteIndex(index);
-            }}
-          >
-            {busData.routes.map(route => {
-              const buses = getNextBuses(route, now, holidays);
-              if (buses.length === 0) return (
-                <div key={route.id} className="min-w-full snap-center shrink-0 px-1 box-border">
-                  <div className="flex items-center justify-between bg-gray-800/30 p-3.5 rounded-2xl border border-gray-700/30 h-full">
-                    <div className="w-[40%] flex flex-col justify-center">
-                      <div>
-                        <span className="font-bold text-gray-500 text-[14px] sm:text-[15px] tracking-tight truncate">{route.name}</span>
-                        <span className="text-[9px] sm:text-[10px] font-bold text-gray-500 ml-0.5">行</span>
-                      </div>
-                      {route.boardingStop && (
-                        <div className="flex items-center space-x-1 mt-0.5 opacity-60">
-                          <MapPin size={10} className="text-gray-500 flex-shrink-0" />
-                          <span className="text-[9px] sm:text-[10px] font-medium text-gray-500 truncate">乗場: {route.boardingStop}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="w-[60%] text-right">
-                      <span className="text-xs font-bold text-gray-500">本日の運行終了</span>
-                    </div>
-                  </div>
+        {!selectedBusPanel && (
+          <>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setSelectedBusPanel('campus-bound')}
+              className={`group relative min-h-[150px] overflow-hidden rounded-3xl border-4 p-5 text-left shadow-sm transition-transform active:scale-[0.98] ${isDark ? 'border-gray-700 bg-gray-950 hover:border-blue-500' : 'border-gray-950 bg-white hover:border-blue-600'}`}
+            >
+              <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'radial-gradient(currentColor 1.5px, transparent 1.5px)', backgroundSize: '28px 28px' }} />
+              <div className="relative flex h-full flex-col justify-between">
+                <Bus className="text-blue-500" size={28} />
+                <div>
+                  <p className={`text-3xl font-black tracking-tight sm:text-4xl ${isDark ? 'text-white' : 'text-gray-950'}`}>埼大行</p>
+                  <p className={`mt-2 text-xs font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>南与野・北浦和・志木などから大学方面</p>
                 </div>
-              );
-
-              const nextBus = buses[0];
-              const nextNextBus = buses[1];
-
-              return (
-                <div key={route.id} className="min-w-full snap-center shrink-0 px-1 box-border">
-                  <div className={`flex items-center justify-between transition-colors p-3.5 rounded-2xl border h-full ${isDark ? 'bg-gray-800/50 hover:bg-gray-800/80 border-gray-700/50' : 'bg-[#f9fafb] hover:bg-[#f3f4f6] border-[#e5e7eb]'}`}>
-                    <div className="w-[35%] flex flex-col justify-center">
-                      <div>
-                        <span className={`font-extrabold text-[14px] sm:text-[15px] tracking-tight truncate ${isDark ? 'text-white' : 'text-[#111827]'}`}>{route.name}</span>
-                        <span className={`text-[9px] sm:text-[10px] font-bold ml-0.5 ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>行</span>
-                      </div>
-                      {route.boardingStop && (
-                        <div className="flex items-center space-x-1 mt-0.5">
-                          <MapPin size={10} className={`flex-shrink-0 ${isDark ? 'text-gray-500' : 'text-[#9ca3af]'}`} />
-                          <span className={`text-[9px] sm:text-[10px] font-medium truncate ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>乗場: {route.boardingStop}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="w-[20%] flex flex-col items-center justify-center">
-                      <div className="flex items-baseline space-x-0.5 sm:space-x-1">
-                        <span className={`text-[10px] sm:text-[11px] font-bold ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>あと</span>
-                        <span className={`text-xl sm:text-2xl font-black tabular-nums tracking-tighter ${nextBus.diffMinutes <= 5 ? 'text-red-500 animate-pulse' : 'text-pink-500'}`}>{nextBus.diffMinutes}</span>
-                        <span className={`text-[10px] sm:text-[11px] font-bold ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>分</span>
-                      </div>
-                    </div>
-
-                    <div className="w-[45%] flex flex-col items-end space-y-1.5">
-                      <div className="flex items-center space-x-1.5">
-                        {nextBus.isSeibu ? (
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold whitespace-nowrap ${isDark ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'bg-blue-100 text-blue-600 border-blue-200'}`}>西武バス</span>
-                        ) : (
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold whitespace-nowrap ${isDark ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-green-100 text-green-700 border-green-200'}`}>国際興業</span>
-                        )}
-                        <span className={`font-black text-sm sm:text-base tabular-nums ${isDark ? 'text-white' : 'text-[#111827]'}`}>{nextBus.timeStr}</span>
-                      </div>
-                      {nextNextBus && (
-                        <div className="flex items-center space-x-1.5 opacity-70">
-                          <span className={`text-[8px] sm:text-[9px] font-bold ${isDark ? 'text-gray-500' : 'text-[#9ca3af]'}`}>次発</span>
-                          {nextNextBus.isSeibu ? (
-                            <span className={`text-[8px] px-1 py-0.5 rounded border whitespace-nowrap ${isDark ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-100 text-blue-500 border-blue-200'}`}>西武</span>
-                          ) : (
-                            <span className={`text-[8px] px-1 py-0.5 rounded border whitespace-nowrap ${isDark ? 'bg-green-500/20 text-green-500 border-green-500/30' : 'bg-green-100 text-green-600 border-green-200'}`}>国際</span>
-                          )}
-                          <span className={`text-[11px] sm:text-[13px] font-bold tabular-nums ${isDark ? 'text-gray-300' : 'text-[#4b5563]'}`}>{nextNextBus.timeStr}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {busData.routes.length > 1 && (
-            <div className="flex flex-col items-center mt-4 relative z-10">
-              <div className="flex space-x-2 mb-2">
-                {busData.routes.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => {
-                      setActiveBusRouteIndex(i);
-                      if (busCarouselRef.current) {
-                        busCarouselRef.current.scrollTo({
-                          left: busCarouselRef.current.offsetWidth * i,
-                          behavior: 'smooth'
-                        });
-                      }
-                    }}
-                    className={`h-2 rounded-full transition-all duration-300 ${activeBusRouteIndex === i ? 'bg-blue-400 w-5' : (isDark ? 'bg-gray-600 hover:bg-gray-500 w-2' : 'bg-[#d1d5db] hover:bg-[#9ca3af] w-2')}`}
-                    aria-label={`Go to slide ${i + 1}`}
-                  />
-                ))}
               </div>
-              <span className={`text-[10px] font-bold tracking-wide ${isDark ? 'text-gray-400' : 'text-[#6b7280]'}`}>タップまたはスワイプで切り替え</span>
-            </div>
-          )}
+            </button>
 
-          {/* わかめナビリンクバナー */}
-          <div className="mt-4 space-y-2 relative z-10">
-            <div onClick={() => window.open('https://gokaku-studymap.com/bus/', '_blank')} className={`block rounded-xl p-4 cursor-pointer transition-colors ${isDark ? 'bg-blue-900/20 border border-blue-900/40 hover:bg-blue-900/40' : 'bg-blue-50 border border-blue-200 hover:bg-blue-100'}`}>
-              <h3 className={`font-bold text-sm flex items-center mb-1 ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
-                <Bus size={16} className="mr-1" /> 南与野バス、今はどっちに乗るべき？ <ExternalLink size={14} className="ml-1 opacity-50" />
+            <button
+              type="button"
+              onClick={() => setSelectedBusPanel('campus-departure')}
+              className={`group relative min-h-[150px] overflow-hidden rounded-3xl border-4 p-5 text-left shadow-sm transition-transform active:scale-[0.98] ${isDark ? 'border-gray-700 bg-gray-950 hover:border-orange-500' : 'border-gray-950 bg-white hover:border-orange-600'}`}
+            >
+              <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'radial-gradient(currentColor 1.5px, transparent 1.5px)', backgroundSize: '28px 28px' }} />
+              <div className="relative flex h-full flex-col justify-between">
+                <MapPin className="text-orange-500" size={28} />
+                <div>
+                  <p className={`text-3xl font-black tracking-tight sm:text-4xl ${isDark ? 'text-white' : 'text-gray-950'}`}>埼大発</p>
+                  <p className={`mt-2 text-xs font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>大学・埼大通り・埼大裏から駅方面</p>
+                </div>
+              </div>
+            </button>
+            </div>
+
+            <a
+              href="https://wakame-navi.vercel.app/bus"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`mt-4 block rounded-2xl border p-4 transition-colors ${isDark ? 'border-emerald-900/60 bg-emerald-950/30 hover:bg-emerald-950/50' : 'border-emerald-200 bg-emerald-50 hover:bg-emerald-100'}`}
+            >
+              <h3 className={`flex items-center text-sm font-black ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                <MapPin size={18} className="mr-1.5" />
+                遅延状況確認「わかめナビ」
+                <ExternalLink size={14} className="ml-1 opacity-70" />
               </h3>
-              <p className={`text-[11px] sm:text-xs mb-2 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>直近3便や運賃が一目で比較できる神サイト！</p>
-              <div className={`text-[11px] flex items-center justify-end border-t pt-2 mt-1 ${isDark ? 'text-blue-600 border-blue-900/30' : 'text-blue-800 border-blue-200'}`}>
-                <span>開発:</span>
+              <p className={`mt-2 text-xs font-bold ${isDark ? 'text-emerald-300' : 'text-emerald-700'}`}>バスの遅延がリアルタイムでわかる神サイト！</p>
+              <div className={`mt-4 border-t pt-3 text-right text-xs font-bold ${isDark ? 'border-emerald-900/50 text-emerald-500' : 'border-emerald-200 text-emerald-700'}`}>
+                開発:{' '}
                 <span
-                  onClick={(e) => { e.stopPropagation(); window.open('https://x.com/wosaitama', '_blank'); }}
-                  className={`ml-1 cursor-pointer hover:underline flex items-center font-bold ${isDark ? 'text-blue-400' : 'text-blue-600'}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.open('https://x.com/SU_Mentsuyu', '_blank', 'noopener,noreferrer');
+                  }}
+                  className="text-blue-500 hover:underline"
                 >
-                  おさいたま さん <ExternalLink size={10} className="ml-0.5" />
+                  めんつゆ。さん
+                  <ExternalLink size={11} className="ml-0.5 inline" />
                 </span>
               </div>
-            </div>
-          </div>
+            </a>
+          </>
+        )}
 
-        </div>
+        {selectedBusPanel === 'campus-bound' && <MinamiyonoBusGuide now={currentTime} isDark={isDark} />}
+        {selectedBusPanel === 'campus-departure' && <CampusDepartureBusGuide busData={busData} now={currentTime} isDark={isDark} />}
       </div>
     );
   };
@@ -1495,7 +1419,8 @@ export default function MainApp() {
         .theme-light .bg-gray-800 { background-color: #e5e7eb !important; }
         .theme-light .border-gray-800 { border-color: #e5e7eb !important; }
         .theme-light .border-gray-700 { border-color: #d1d5db !important; }
-        .theme-light .text-white:not(.keep-white) { color: #111827 !important; }
+        .theme-light .text-white:not(.keep-white):not(.operator-kokusai) { color: #111827 !important; }
+        .theme-light .operator-kokusai { color: #ffffff !important; }
         .theme-light .text-gray-100 { color: #374151 !important; }
         .theme-light .text-gray-200 { color: #4b5563 !important; }
         .theme-light .text-gray-300 { color: #4b5563 !important; }
