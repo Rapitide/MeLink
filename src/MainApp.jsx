@@ -3,9 +3,8 @@ import {
   Home, Bell, Mail, User as UserIcon, MoreHorizontal,
   MessageCircle, Heart, Feather, Trash2, X, CheckCircle, LogIn, UserPlus, Edit2, Image as ImageIcon, ArrowLeft, Camera, Hash, Plus, Loader2, AlertCircle, Bookmark, BadgeCheck, BookOpen, MessageSquare, Lock, Eye, EyeOff, AtSign, Star, Search as LucideSearchIcon, UploadCloud, ShieldCheck, BarChart2, Activity, MapPin, Clock, FileText, ExternalLink, Bus, Pin, Cloud, Music, Book, Gamepad2, AlertTriangle, Calendar, Megaphone, CalendarDays, Map, Lightbulb, Sun, CloudRain, CloudSnow, CloudLightning, Send, Moon, Coffee, Utensils, Zap, GraduationCap, MonitorPlay, Globe, Library, CheckSquare, ChevronLeft, ChevronRight, Settings
 } from 'lucide-react';
-import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, deleteField, getCountFromServer, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { doc, setDoc, getDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, deleteField, getCountFromServer, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 
 import CampusMapComponent from './CampusMap';
@@ -19,24 +18,25 @@ import UniversityNotice from './UniversityNotice';
 import MinamiyonoBusGuide from './features/minamiyonoBus/MinamiyonoBusGuide';
 import CampusDepartureBusGuide from './features/campusDepartureBus/CampusDepartureBusGuide';
 import { VERIFIED_USERS, VETERAN_USERS, NAMING_USERS, LESSON_COLORS, DEFAULT_LESSON_COLOR, getLessonColor, getWeatherInfo, formatTimeAgo, sanitizeRoomId, isValidId, compressImage, parseCSV, Avatar, SPOTS, LEVELS, FEATURE_POLL_OPTIONS, encodeFirestoreFieldKey } from './utils';
+import { getFirebaseApp, getFirebaseAuth, getFirebaseFirestore } from './config/firebaseClient';
+import { isTestFirebaseEnvironment } from './config/firebaseConfig';
+import { subscribeToAdminStatus } from './services/adminAuthService';
+import {
+  buildAccountSession,
+  collectProfilePostsForAliases,
+  countAccountIdMap,
+  createAccountIdAliases,
+  isCurrentAccountId,
+  mergeAccountIdMaps,
+  mergeCurrentProfileWithLegacyProfile
+} from './services/accountIdentityAdapter';
 
 const DEFAULT_BOARD_ROOM = sanitizeRoomId('埼玉大学全体');
 
 // --- Firebase設定 ---
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-};
-
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
-const firestore = getFirestore(app);
+const app = getFirebaseApp();
+const auth = getFirebaseAuth();
+const firestore = getFirebaseFirestore();
 
 const getNextBuses = (route, now, holidays = []) => {
   const day = now.getDay();
@@ -130,6 +130,8 @@ export default function MainApp() {
   const [activeTimetableLesson, setActiveTimetableLesson] = useState(null);
   const [user, setUser] = useState(null);
   const [currentUserProfile, setCurrentUserProfile] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminDebugStatus, setAdminDebugStatus] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(() => {
     try {
       return !!localStorage.getItem('twitter_clone_current_id');
@@ -139,6 +141,20 @@ export default function MainApp() {
   });
   const [currentAccountId, setCurrentAccountId] = useState(localStorage.getItem('twitter_clone_current_id') || '');
   const [currentRoomId, setCurrentRoomId] = useState(localStorage.getItem('twitter_clone_room_id') || sanitizeRoomId("埼玉大学全体"));
+  const accountSession = useMemo(() => buildAccountSession({
+    firebaseUid: currentUserProfile?.firebaseUid || (currentUserProfile?.authProvider === 'apple.com' ? currentUserProfile?.id : null),
+    legacyUserId: currentUserProfile?.legacyUserId || null,
+    primaryAccountId: currentAccountId,
+    legacyLoginId: currentUserProfile?.authProvider === 'apple.com' ? null : currentAccountId
+  }), [
+    currentAccountId,
+    currentUserProfile?.authProvider,
+    currentUserProfile?.firebaseUid,
+    currentUserProfile?.id,
+    currentUserProfile?.legacyUserId
+  ]);
+  const accountIdAliases = accountSession.accountIdAliases;
+  const accountIdAliasesKey = accountIdAliases.join('\u0000');
   const [availableRooms, setAvailableRooms] = useState(() => {
     try {
       const cached = JSON.parse(localStorage.getItem('twitter_clone_available_rooms'));
@@ -284,8 +300,6 @@ export default function MainApp() {
   const headerInputRef = useRef(null);
   const avatarInputRef = useRef(null);
 
-  const isAdmin = currentAccountId === '管理者';
-
   const showToast = (msg) => { setToastMessage(msg); setTimeout(() => setToastMessage(""), 3000); };
 
   async function registerPublicRoom(roomName, createdBy) {
@@ -341,6 +355,7 @@ export default function MainApp() {
           _displayKey: repostKey,
           _repostedBy: repostByName,
           _repostTimestamp: repostTimestamp,
+          _postTimestamp: p.timestamp,
           timestamp: repostTimestamp, // リポスト時刻でソート
           _isRepostEntry: true
         });
@@ -374,6 +389,14 @@ export default function MainApp() {
     return () => unsub();
   }, []);
 
+  useEffect(() => (
+    subscribeToAdminStatus({
+      currentUser: user,
+      onChange: setIsAdmin,
+      onDebug: setAdminDebugStatus
+    })
+  ), [user]);
+
   useEffect(() => {
     if (!currentAccountId || !currentRoomId) {
       setIsAuthLoading(false);
@@ -393,6 +416,38 @@ export default function MainApp() {
     });
     return () => unsub();
   }, [currentAccountId, currentRoomId]);
+
+  useEffect(() => {
+    const legacyUserId = currentUserProfile?.legacyUserId;
+    if (
+      currentUserProfile?.authProvider !== 'apple.com'
+      || !legacyUserId
+      || legacyUserId === currentAccountId
+      || !currentRoomId
+    ) {
+      return undefined;
+    }
+
+    const rs = sanitizeRoomId(currentRoomId);
+    const unsub = onSnapshot(doc(firestore, `rooms/${rs}/users/${legacyUserId}`), (snap) => {
+      if (!snap.exists()) return;
+      const legacyProfile = { id: snap.id, ...snap.data() };
+      setCurrentUserProfile((profile) => mergeCurrentProfileWithLegacyProfile({
+        currentProfile: profile,
+        legacyProfile,
+        legacyUserId
+      }));
+    }, (err) => {
+      console.error("旧プロフィールの補完に失敗しました:", err);
+    });
+
+    return () => unsub();
+  }, [
+    currentAccountId,
+    currentRoomId,
+    currentUserProfile?.authProvider,
+    currentUserProfile?.legacyUserId
+  ]);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(firestore, `globalData/featurePoll`), (snap) => { if (snap.exists()) setFeaturePollVotes(snap.data().multiVotes || {}); });
@@ -488,12 +543,42 @@ export default function MainApp() {
   }, []);
 
   useEffect(() => {
+    const aliases = createAccountIdAliases(accountIdAliases);
+    if (!aliases.length || !currentRoomId) {
+      setFollowing({});
+      setFollowers({});
+      return;
+    }
+    const rs = sanitizeRoomId(currentRoomId);
+    const followMapsByAlias = new Map();
+    const followerMapsByAlias = new Map();
+
+    const updateFollowing = () => {
+      setFollowing(mergeAccountIdMaps(Array.from(followMapsByAlias.values())));
+    };
+    const updateFollowers = () => {
+      setFollowers(mergeAccountIdMaps(Array.from(followerMapsByAlias.values())));
+    };
+
+    const unsubscribers = aliases.flatMap((alias) => [
+      onSnapshot(doc(firestore, `rooms/${rs}/follows/${alias}`), (snap) => {
+        followMapsByAlias.set(alias, snap.exists() ? snap.data().targets || {} : {});
+        updateFollowing();
+      }),
+      onSnapshot(doc(firestore, `rooms/${rs}/followers/${alias}`), (snap) => {
+        followerMapsByAlias.set(alias, snap.exists() ? snap.data().sources || {} : {});
+        updateFollowers();
+      })
+    ]);
+
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+  }, [accountIdAliasesKey, currentRoomId]);
+
+  useEffect(() => {
     if (!currentAccountId || !currentRoomId) return;
     const rs = sanitizeRoomId(currentRoomId);
-    const unsubFollows = onSnapshot(doc(firestore, `rooms/${rs}/follows/${currentAccountId}`), (snap) => { setFollowing(snap.exists() ? snap.data().targets || {} : {}); });
-    const unsubFollowers = onSnapshot(doc(firestore, `rooms/${rs}/followers/${currentAccountId}`), (snap) => { setFollowers(snap.exists() ? snap.data().sources || {} : {}); });
     const unsubBookmarks = onSnapshot(doc(firestore, `rooms/${rs}/bookmarks/${currentAccountId}`), (snap) => { setUserBookmarks(snap.exists() ? snap.data().posts || {} : {}); });
-    return () => { unsubFollows(); unsubFollowers(); unsubBookmarks(); };
+    return () => unsubBookmarks();
   }, [currentAccountId, currentRoomId]);
 
   useEffect(() => {
@@ -541,54 +626,32 @@ export default function MainApp() {
 
   // プロフィール用：対象ユーザーの全投稿をlimitなしで取得
   const [profilePosts, setProfilePosts] = useState([]);
-  const profilePostsTargetId = useMemo(() => {
-    if (currentBottomTab === 'プロフィール' && currentAccountId) return currentAccountId;
-    if (currentBottomTab === 'コミュニティ' && activeTab === 'プロフィール' && viewingProfileId) return viewingProfileId;
-    return null;
-  }, [currentBottomTab, currentAccountId, activeTab, viewingProfileId]);
+  const profilePostsTargetAliases = useMemo(() => {
+    if (currentBottomTab === 'プロフィール' && currentAccountId) return accountIdAliases;
+    if (currentBottomTab === 'コミュニティ' && activeTab === 'プロフィール' && viewingProfileId) {
+      return createAccountIdAliases(viewingProfileId);
+    }
+    return [];
+  }, [
+    accountIdAliases,
+    activeTab,
+    currentAccountId,
+    currentBottomTab,
+    viewingProfileId
+  ]);
+  const profilePostsTargetKey = profilePostsTargetAliases.join('\u0000');
 
   useEffect(() => {
-    if (!profilePostsTargetId || !currentRoomId) { setProfilePosts([]); return; }
+    if (!profilePostsTargetAliases.length || !currentRoomId) { setProfilePosts([]); return; }
     setProfilePosts([]);
     const rs = sanitizeRoomId(currentRoomId);
     const q = query(collection(firestore, `rooms/${rs}/posts`), orderBy('timestamp', 'desc'), limit(150));
     const unsub = onSnapshot(q, (snap) => {
       const allRoomPosts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      const userTimeline = [];
-      const repostInserted = new Set();
-
-      for (const p of allRoomPosts) {
-        // 返信ポストはプロフィール一覧には直接表示しない(本家Xの「ポスト」タブと同様に通常ポストとリポストのみ表示)
-        if (p.replyTo) continue;
-
-        if (p.authorId === profilePostsTargetId) {
-          userTimeline.push(p);
-        }
-
-        const reposts = (p.reposts && typeof p.reposts === 'object' && !Array.isArray(p.reposts)) ? p.reposts : {};
-        if (reposts[profilePostsTargetId] && p.authorId !== profilePostsTargetId) {
-          const repostData = reposts[profilePostsTargetId];
-          const repostTimestamp = (repostData && typeof repostData === 'object') ? repostData.timestamp : Date.now();
-          const repostByName = (repostData && typeof repostData === 'object') ? repostData.name : profilePostsTargetId;
-          const repostKey = `${p.id}_profile_repost_${profilePostsTargetId}`;
-          if (!repostInserted.has(repostKey)) {
-            repostInserted.add(repostKey);
-            userTimeline.push({
-              ...p,
-              _displayKey: repostKey,
-              _repostedBy: repostByName,
-              _repostTimestamp: repostTimestamp,
-              timestamp: repostTimestamp,
-              _isRepostEntry: true
-            });
-          }
-        }
-      }
-      userTimeline.sort((a, b) => b.timestamp - a.timestamp);
-      setProfilePosts(userTimeline);
+      setProfilePosts(collectProfilePostsForAliases(allRoomPosts, profilePostsTargetAliases));
     });
     return () => unsub();
-  }, [profilePostsTargetId, currentRoomId]);
+  }, [profilePostsTargetKey, currentRoomId]);
 
   useEffect(() => {
     const fetchWeather = () => {
@@ -642,7 +705,7 @@ export default function MainApp() {
     if (!user) { setErrorMessage("サーバーに接続されていません。"); return; }
     const { name, userId, password, rememberMe, avatarUrl } = loginForm;
     if (!name || !userId || !password) return;
-    if (userId === '管理者' && password !== import.meta.env.VITE_ADMIN_PASSWORD) { setErrorMessage("パスワードが間違っています。"); return; }
+    if (userId === '管理者') { setErrorMessage("管理者権限はFirebase Authログイン後に確認します。旧ログインでは管理者IDを作成できません。"); return; }
     if (userId !== '管理者' && !isValidId(userId)) { setErrorMessage("ユーザーIDは半角英数字のみ。"); return; }
     if (!isValidId(password)) { setErrorMessage("パスワードは半角英数字のみ。"); return; }
     setIsSubmitting(true); setErrorMessage("");
@@ -667,7 +730,7 @@ export default function MainApp() {
     if (!user) { setErrorMessage("サーバーに接続されていません。"); return; }
     const { userId, password, rememberMe } = loginForm;
     if (!userId || !password) return;
-    if (userId === '管理者' && password !== import.meta.env.VITE_ADMIN_PASSWORD) { setErrorMessage("パスワードが間違っています。"); return; }
+    if (userId === '管理者') { setErrorMessage("管理者権限はFirebase Authログイン後に確認します。旧ログインでは管理者IDを使用できません。"); return; }
     if (userId !== '管理者' && !isValidId(userId)) { setErrorMessage("ユーザーIDは半角英数字のみ。"); return; }
     if (!isValidId(password)) { setErrorMessage("パスワードは半角英数字のみ。"); return; }
     setIsSubmitting(true); setErrorMessage("");
@@ -681,6 +744,38 @@ export default function MainApp() {
       addRoomToHistory(sanitizeRoomId("埼玉大学全体"));
       setCurrentAccountId(userId); setViewingProfileId(userId); setCurrentRoomId(sanitizeRoomId("埼玉大学全体"));
     } catch (err) { setErrorMessage(`ログインに失敗しました。`); } finally { setIsSubmitting(false); }
+  };
+
+  const handleAppleAuthComplete = (profile) => {
+    if (!profile?.uid || profile.profileSetupCompleted !== true) {
+      return;
+    }
+
+    const displayName = profile.displayName || profile.handle || 'Apple User';
+    const handle = profile.handle ? `@${profile.handle}` : '@apple_user';
+    const appleProfile = {
+      id: profile.uid,
+      name: displayName,
+      handle,
+      bio: '',
+      avatarUrl: '',
+      headerUrl: '',
+      avatarColor: 'bg-gray-700',
+      firebaseUid: profile.uid,
+      legacyUserId: profile.legacyUserId || null,
+      primaryAccountId: profile.uid,
+      authProvider: 'apple.com',
+      hasLegacyUserId: profile.hasLegacyUserId === true
+    };
+
+    setErrorMessage('');
+    setCurrentAccountId(profile.uid);
+    setViewingProfileId(profile.uid);
+    setCurrentUserProfile(appleProfile);
+    setCurrentRoomId(sanitizeRoomId("埼玉大学全体"));
+    setCurrentBottomTab('コミュニティ');
+    setActiveTab('おすすめ');
+    setIsAuthLoading(false);
   };
 
   const switchRoom = async (roomName) => {
@@ -1088,6 +1183,8 @@ export default function MainApp() {
 
       setIsSettingsModalOpen(false);
       setCurrentAccountId('');
+      setCurrentUserProfile(null);
+      setViewingProfileId(null);
       setCurrentRoomId(sanitizeRoomId("埼玉大学全体"));
       setAvailableRooms([DEFAULT_BOARD_ROOM]);
       setTimetableData({});
@@ -1120,19 +1217,37 @@ export default function MainApp() {
 
   const toggleFollow = async (targetId, e) => {
     if (e) e.stopPropagation();
-    if (!currentUserProfile || targetId === currentAccountId) return;
+    const targetAccountId = createAccountIdAliases(targetId)[0];
+    const sourceAccountId = accountSession.primaryAccountId || currentAccountId;
+    const sourceAliases = createAccountIdAliases(accountIdAliases.length ? accountIdAliases : sourceAccountId);
+    if (
+      !currentUserProfile
+      || !targetAccountId
+      || !sourceAccountId
+      || isCurrentAccountId(targetAccountId, sourceAliases)
+    ) return;
     const rs = sanitizeRoomId(currentRoomId);
-    if (following[targetId]) {
-      setDoc(doc(firestore, `rooms/${rs}/follows/${currentAccountId}`), { targets: { [targetId]: deleteField() } }, { merge: true });
-      setDoc(doc(firestore, `rooms/${rs}/followers/${targetId}`), { sources: { [currentAccountId]: deleteField() } }, { merge: true });
+    if (following[targetAccountId]) {
+      const followerSourceDeletes = sourceAliases.reduce((acc, alias) => {
+        acc[alias] = deleteField();
+        return acc;
+      }, {});
+      await Promise.all([
+        ...sourceAliases.map((alias) => (
+          setDoc(doc(firestore, `rooms/${rs}/follows/${alias}`), { targets: { [targetAccountId]: deleteField() } }, { merge: true })
+        )),
+        setDoc(doc(firestore, `rooms/${rs}/followers/${targetAccountId}`), { sources: followerSourceDeletes }, { merge: true })
+      ]);
     } else {
-      setDoc(doc(firestore, `rooms/${rs}/follows/${currentAccountId}`), { targets: { [targetId]: true } }, { merge: true });
-      setDoc(doc(firestore, `rooms/${rs}/followers/${targetId}`), { sources: { [currentAccountId]: true } }, { merge: true });
+      await Promise.all([
+        setDoc(doc(firestore, `rooms/${rs}/follows/${sourceAccountId}`), { targets: { [targetAccountId]: true } }, { merge: true }),
+        setDoc(doc(firestore, `rooms/${rs}/followers/${targetAccountId}`), { sources: { [sourceAccountId]: true } }, { merge: true })
+      ]);
     }
   };
 
   const openUserProfile = (userId, fallbackData = null) => {
-    if (userId === currentAccountId) setCurrentBottomTab('プロフィール');
+    if (isCurrentAccountId(userId, accountIdAliases.length ? accountIdAliases : [currentAccountId])) setCurrentBottomTab('プロフィール');
     else {
       setSavedScrollPosition(window.scrollY);
       setCurrentBottomTab('コミュニティ');
@@ -1466,7 +1581,24 @@ export default function MainApp() {
 
   const daysOfWeek = ['日', '月', '火', '水', '木', '金', '土'];
   const dateString = `${currentTime.getMonth() + 1}/${currentTime.getDate()} (${daysOfWeek[currentTime.getDay()]})`;
+  const renderAdminDebugPanel = () => {
+    if (!isTestFirebaseEnvironment || !adminDebugStatus) return null;
 
+    return (
+      <div className="fixed bottom-20 right-3 z-[9999] max-w-[260px] rounded-lg border border-yellow-700 bg-black/90 p-3 text-[11px] leading-relaxed text-yellow-100 shadow-xl">
+        <div className="font-bold text-yellow-300">Admin debug</div>
+        <div>auth uid: {adminDebugStatus.uidPrefix || 'none'}</div>
+        <div>admin status: {adminDebugStatus.status}</div>
+        <div>admin document found: {String(adminDebugStatus.documentFound)}</div>
+        <div>role valid: {String(adminDebugStatus.roleValid)}</div>
+        <div>enabled: {String(adminDebugStatus.enabled)}</div>
+        <div>isAdmin: {String(isAdmin)}</div>
+        <div>Firestore emulator connected: {String(adminDebugStatus.firestoreEmulator?.connected)}</div>
+        <div>Firestore: {adminDebugStatus.firestoreEmulator?.host}:{adminDebugStatus.firestoreEmulator?.port}</div>
+        {adminDebugStatus.errorCode && <div>error: {adminDebugStatus.errorCode}</div>}
+      </div>
+    );
+  };
 
   if (isAuthLoading) {
     return (
@@ -1516,6 +1648,7 @@ export default function MainApp() {
         isSubmitting={isSubmitting}
         isTermsModalOpen={isTermsModalOpen}
         setIsTermsModalOpen={setIsTermsModalOpen}
+        onAppleAuthComplete={handleAppleAuthComplete}
       />
     );
   }
@@ -1523,6 +1656,7 @@ export default function MainApp() {
   return (
     <div className={`min-h-screen transition-colors duration-300 ${!isDark ? 'theme-light' : ''}`}>
       {renderStyle()}
+      {renderAdminDebugPanel()}
       <div className={`min-h-screen transition-colors duration-300 lg:flex font-sans ${isDark ? 'bg-black text-white' : 'bg-white text-gray-900'}`}>
         {/* サイドバー (lg以上で表示) */}
         <div className={`hidden lg:flex lg:flex-col ${isSidebarCollapsed ? 'lg:w-20 lg:p-3' : 'lg:w-64 lg:p-4'} lg:fixed lg:left-0 lg:top-0 lg:bottom-0 lg:border-r lg:z-40 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${isDark ? 'lg:bg-black lg:border-gray-800' : 'lg:bg-gray-50 lg:border-gray-200'}`}>
@@ -2121,6 +2255,7 @@ export default function MainApp() {
                 currentRoomId={currentRoomId}
                 currentAccountId={currentAccountId}
                 currentUserProfile={currentUserProfile}
+                accountIdAliases={accountIdAliases}
                 isAdmin={isAdmin}
                 following={following}
                 followers={followers}
@@ -2180,8 +2315,8 @@ export default function MainApp() {
                     <p className={`text-[15px] whitespace-pre-wrap leading-relaxed mb-3 ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{currentUserProfile.bio || '自己紹介が未設定です。'}</p>
                     <div className={`flex items-center space-x-4 text-sm mb-4 pb-2 border-b ${isDark ? 'border-b-gray-800' : 'border-b-gray-150'}`}>
                       <div className="flex items-center"><span className={`font-extrabold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{profilePosts.length}</span><span className={`${isDark ? 'text-gray-500' : 'text-gray-400'} font-bold`}>ポスト</span></div>
-                      <button onClick={() => openFollowList('フォロー中', following)} className="hover:underline flex items-center"><span className={`font-extrabold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{Object.keys(following || {}).length}</span><span className={`${isDark ? 'text-gray-500' : 'text-gray-400'} font-bold`}>フォロー中</span></button>
-                      <button onClick={() => openFollowList('フォロワー', followers)} className="hover:underline flex items-center"><span className={`font-extrabold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{Object.keys(followers || {}).length}</span><span className={`${isDark ? 'text-gray-500' : 'text-gray-400'} font-bold`}>フォロワー</span></button>
+                      <button onClick={() => openFollowList('フォロー中', following)} className="hover:underline flex items-center"><span className={`font-extrabold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{countAccountIdMap(following)}</span><span className={`${isDark ? 'text-gray-500' : 'text-gray-400'} font-bold`}>フォロー中</span></button>
+                      <button onClick={() => openFollowList('フォロワー', followers)} className="hover:underline flex items-center"><span className={`font-extrabold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{countAccountIdMap(followers)}</span><span className={`${isDark ? 'text-gray-500' : 'text-gray-400'} font-bold`}>フォロワー</span></button>
                     </div>
                   </div>
                 </div>
@@ -2207,7 +2342,7 @@ export default function MainApp() {
                 {profileTab === 'posts' && (() => {
                   const myPosts = profilePosts;
                   if (myPosts.length === 0 && !isLoading) return <div className={`p-10 text-center font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>ポストがありません。</div>;
-                  return myPosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={verifiedUsers} VETERAN_USERS={veteranUsers} NAMING_USERS={namingUsers} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={posts} onNavigateToPost={(id) => {
+                  return myPosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} accountIdAliases={accountIdAliases} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={verifiedUsers} VETERAN_USERS={veteranUsers} NAMING_USERS={namingUsers} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={posts} onNavigateToPost={(id) => {
                     setCurrentBottomTab('コミュニティ');
                     setExpandedPostId(id);
                     setTimeout(() => {

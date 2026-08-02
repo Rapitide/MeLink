@@ -1,0 +1,221 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function hasFirebaseProviderClaim() {
+      return signedIn()
+        && request.auth.token.firebase is map
+        && request.auth.token.firebase.sign_in_provider is string;
+    }
+
+    function signInProvider() {
+      return request.auth.token.firebase.sign_in_provider;
+    }
+
+    function isAppleProvider() {
+      return hasFirebaseProviderClaim() && signInProvider() == 'apple.com';
+    }
+
+    function isNonAnonymousAppleUser() {
+      return isAppleProvider() && signInProvider() != 'anonymous';
+    }
+
+    function isNonAnonymousSignedIn() {
+      return hasFirebaseProviderClaim() && signInProvider() != 'anonymous';
+    }
+
+    function adminDocPath(uid) {
+      return /databases/$(database)/documents/admins/$(uid);
+    }
+
+    function isAdmin() {
+      return isNonAnonymousSignedIn()
+        && exists(adminDocPath(request.auth.uid))
+        && get(adminDocPath(request.auth.uid)).data.role == 'admin'
+        && get(adminDocPath(request.auth.uid)).data.enabled == true;
+    }
+
+    function reservedHandles() {
+      return [
+        'admin',
+        'administrator',
+        'system',
+        'support',
+        'official',
+        'null',
+        'undefined',
+        'apple',
+        'firebase',
+        'saitama',
+        'saidai'
+      ];
+    }
+
+    function forbiddenUserFields() {
+      return [
+        'email',
+        'password',
+        'saved_password',
+        'appleIdentityToken',
+        'appleAuthorizationCode',
+        'identityToken',
+        'authorizationCode',
+        'firebaseIdToken',
+        'token',
+        'nonce',
+        'refreshToken',
+        'accessToken'
+      ];
+    }
+
+    function initialUserFields() {
+      return [
+        'uid',
+        'handle',
+        'displayName',
+        'authProviders',
+        'appleLinked',
+        'profileSetupCompleted',
+        'legacyUserId',
+        'createdAt',
+        'updatedAt'
+      ];
+    }
+
+    function profileSetupFields() {
+      return [
+        'displayName',
+        'handle',
+        'profileSetupCompleted',
+        'updatedAt'
+      ];
+    }
+
+    function hasInitialUserFields(data) {
+      return data.keys().hasAll(initialUserFields());
+    }
+
+    function validDisplayName(value) {
+      return value is string
+        && value.size() >= 1
+        && value.size() <= 30
+        && value.matches('^\\S(.*\\S)?$');
+    }
+
+    function validHandle(handle) {
+      return handle is string
+        && handle.size() >= 3
+        && handle.size() <= 20
+        && handle.matches('^[a-z0-9_]+$')
+        && !handle.matches('^_.*')
+        && !handle.matches('.*_$')
+        && !handle.matches('.*__.*')
+        && !handle.matches('.*@.*')
+        && !(handle in reservedHandles());
+    }
+
+    function userCreateShape(uid) {
+      return request.resource.data.keys().hasOnly(initialUserFields())
+        && request.resource.data.keys().hasAll(initialUserFields())
+        && !request.resource.data.keys().hasAny(forbiddenUserFields())
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.uid == uid
+        && request.resource.data.handle == null
+        && request.resource.data.displayName == null
+        && request.resource.data.authProviders == ['apple.com']
+        && request.resource.data.appleLinked == true
+        && request.resource.data.profileSetupCompleted == false
+        && request.resource.data.legacyUserId == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function handleDocPath(handle) {
+      return /databases/$(database)/documents/handles/$(handle);
+    }
+
+    function requestedHandleIsReservedForUser(handle) {
+      return validHandle(handle)
+        && existsAfter(handleDocPath(handle))
+        && getAfter(handleDocPath(handle)).data.keys().hasAll(['uid'])
+        && getAfter(handleDocPath(handle)).data.uid == request.auth.uid;
+    }
+
+    function profileSetupUpdateShape(uid) {
+      return hasInitialUserFields(resource.data)
+        && hasInitialUserFields(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(profileSetupFields())
+        && !request.resource.data.keys().hasAny(forbiddenUserFields())
+        && resource.data.uid == uid
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.legacyUserId == resource.data.legacyUserId
+        && request.resource.data.appleLinked == true
+        && request.resource.data.authProviders == resource.data.authProviders
+        && request.resource.data.authProviders == ['apple.com']
+        && resource.data.profileSetupCompleted == false
+        && request.resource.data.profileSetupCompleted == true
+        && request.resource.data.updatedAt == request.time
+        && validDisplayName(request.resource.data.displayName)
+        && validHandle(request.resource.data.handle)
+        && requestedHandleIsReservedForUser(request.resource.data.handle);
+    }
+
+    function handleCreateShape(handle) {
+      return request.resource.data.keys().hasOnly(['uid', 'createdAt'])
+        && request.resource.data.keys().hasAll(['uid', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && validHandle(handle);
+    }
+
+    match /users/{uid} {
+      allow get: if isSelf(uid);
+      allow list: if false;
+      allow create: if isSelf(uid)
+        && isNonAnonymousAppleUser()
+        && userCreateShape(uid);
+      allow update: if isSelf(uid)
+        && isNonAnonymousAppleUser()
+        && profileSetupUpdateShape(uid);
+      allow delete: if false;
+    }
+
+    match /handles/{handle} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn()
+        && isNonAnonymousAppleUser()
+        && !exists(handleDocPath(handle))
+        && handleCreateShape(handle);
+      allow update, delete: if false;
+    }
+
+    match /admins/{uid} {
+      allow get: if isSelf(uid) && isNonAnonymousSignedIn();
+      allow list: if false;
+      allow create, update, delete: if false;
+    }
+
+    match /globalData/{docId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update: if isAdmin()
+        && docId in ['boardRooms', 'badges'];
+      allow delete: if false;
+    }
+
+    match /rooms/{roomId}/posts/{postId} {
+      allow update, delete: if isAdmin();
+    }
+  }
+}

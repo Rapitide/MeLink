@@ -1,8 +1,40 @@
 import React, { useState, useMemo, useCallback, Suspense, useRef, useEffect } from 'react';
 import { doc, setDoc, updateDoc, deleteDoc, collection, addDoc, deleteField } from 'firebase/firestore';
 import { Heart, MessageCircle, Bookmark, Pin, Trash2, CheckCircle, BadgeCheck, BarChart2, Loader2, Plus, ArrowLeft, Repeat, Smile } from 'lucide-react';
+import { countAccountIdMap, isCurrentAccountId, isCurrentUserPost } from './services/accountIdentityAdapter';
 
 const EmojiPicker = React.lazy(() => import('emoji-picker-react'));
+
+const formatPostDateTime = (timestamp) => {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('ja-JP', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date);
+};
+
+const formatShortRelativeTime = (timestamp) => {
+  if (!timestamp) return '';
+  const diffMs = Date.now() - timestamp;
+  if (diffMs < 0) return 'たった今';
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diffMs < minute) return 'たった今';
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)}分前`;
+  if (diffMs < day) return `${Math.floor(diffMs / hour)}時間前`;
+  const days = Math.floor(diffMs / day);
+  if (days <= 5) return `${days}日前`;
+  return '';
+};
+
+const normalizeHandle = (handle) => String(handle || '').replace(/^@+/, '');
 
 const renderTextWithLinks = (text, onSwitchRoom, isDark, availableRooms = []) => {
   if (!text) return null;
@@ -228,6 +260,7 @@ const MentionTextarea = React.memo(function MentionTextarea({
 
 export const PostItem = React.memo(function PostItem({
   p, firestore, currentRoomId, currentAccountId, currentUserProfile,
+  accountIdAliases = [],
   isAdmin, following, userBookmarks, expandedPostId, setExpandedPostId,
   toggleFollow, openUserProfile, formatTimeAgo, sanitizeRoomId,
   VERIFIED_USERS, VETERAN_USERS, NAMING_USERS, setBadgeModal, Avatar,
@@ -496,6 +529,11 @@ export const PostItem = React.memo(function PostItem({
     const likeNames = Object.values(likes).filter(n => typeof n === 'string'), likeCount = likeNames.length, isLiked = likes[currentAccountId];
     const isFollowing = following[p.authorId], isBookmarked = userBookmarks[p.id];
     const authorName = p.authorName || '名無し', authorAvatarUrl = p.authorAvatarUrl || null, authorColor = p.authorColor || 'bg-blue-500';
+    const isOwnPost = isCurrentUserPost(p, accountIdAliases.length ? accountIdAliases : [currentAccountId]);
+    const postTimestamp = p._postTimestamp || p.timestamp;
+    const authorHandle = normalizeHandle(p.authorHandle || p.authorId || '');
+    const postDateTime = formatPostDateTime(postTimestamp);
+    const shortRelativeTime = formatShortRelativeTime(postTimestamp);
 
     // リポスト関連
     const reposts = (p.reposts && typeof p.reposts === 'object' && !Array.isArray(p.reposts)) ? p.reposts : {};
@@ -562,20 +600,23 @@ export const PostItem = React.memo(function PostItem({
             <Avatar src={authorAvatarUrl} name={authorName} color={authorColor} />
           </div>
           <div className="flex-grow min-w-0">
-            <div className="flex items-center justify-between min-w-0 gap-1">
-              {/* 左側：名前＋認証バッジ（truncate可）、ユーザー名・日付（省略可） */}
-              <div className="flex items-center min-w-0 flex-1">
-                <div className="flex items-center min-w-0 cursor-pointer" onClick={(e) => { e.stopPropagation(); openUserProfile(p.authorId, { name: authorName, avatarUrl: authorAvatarUrl, avatarColor: authorColor }); }}>
-                  <span className={`font-bold truncate hover:underline flex items-center flex-shrink-0 max-w-[120px] sm:max-w-[200px] ${isDark ? 'text-white' : 'text-gray-900'}`}>{authorName}{(VERIFIED_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'admin' }); }} size={16} className="text-black fill-yellow-500 ml-1 flex-shrink-0 cursor-pointer" />}{(VETERAN_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'veteran' }); }} size={16} className="text-black fill-blue-500 ml-1 flex-shrink-0 cursor-pointer" />}{(NAMING_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'naming' }); }} size={16} className="text-black fill-pink-500 ml-1 flex-shrink-0 cursor-pointer" />}</span>
-                  <span className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-sm ml-1 hidden sm:inline truncate max-w-[80px]`}>@{p.authorId}</span>
-                  <span className={`${isDark ? 'text-gray-400' : 'text-gray-500'} text-sm ml-1 whitespace-nowrap hidden xs:inline`}>· {formatTimeAgo(p.timestamp)}</span>
+            <div className="flex items-center justify-between min-w-0 gap-2">
+              {/* 左側：名前＋認証バッジ＋ユーザーネーム。詰まる時はここだけ省略して、フォローボタンは残す */}
+              <div className="flex min-w-0 flex-1 items-center overflow-hidden">
+                <div className="flex min-w-0 max-w-full cursor-pointer items-center overflow-hidden" onClick={(e) => { e.stopPropagation(); openUserProfile(p.authorId, { name: authorName, avatarUrl: authorAvatarUrl, avatarColor: authorColor }); }}>
+                  <span className={`min-w-0 truncate font-bold hover:underline ${isDark ? 'text-white' : 'text-gray-900'}`}>{authorName}</span>
+                  {(VERIFIED_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'admin' }); }} size={16} className="ml-1 flex-shrink-0 cursor-pointer fill-yellow-500 text-black" />}
+                  {(VETERAN_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'veteran' }); }} size={16} className="ml-1 flex-shrink-0 cursor-pointer fill-blue-500 text-black" />}
+                  {(NAMING_USERS || []).some(u => u.toLowerCase() === (p.authorId || '').toLowerCase()) && <BadgeCheck onClick={(e) => { e.stopPropagation(); setBadgeModal({ isOpen: true, type: 'naming' }); }} size={16} className="ml-1 flex-shrink-0 cursor-pointer fill-pink-500 text-black" />}
+                  {authorHandle && <span className={`${isDark ? 'text-gray-400' : 'text-gray-500'} ml-1 min-w-0 truncate text-sm`}>@{authorHandle}</span>}
+                  {shortRelativeTime && <span className={`${isDark ? 'text-gray-400' : 'text-gray-500'} ml-1 hidden flex-shrink-0 whitespace-nowrap text-sm xs:inline`}>· {shortRelativeTime}</span>}
                 </div>
               </div>
               {/* 右側：フォローボタン（常に表示）＋管理系ボタン */}
-              <div className="flex items-center gap-1 flex-shrink-0">
-                {p.authorId !== currentAccountId && <button onClick={(e) => toggleFollow(p.authorId, e)} className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold border transition-colors whitespace-nowrap flex-shrink-0 ${isFollowing ? (isDark ? 'border-gray-600 text-white hover:border-red-500/50 hover:text-red-400 hover:bg-red-900/30 bg-transparent' : 'border-gray-300 text-gray-700 hover:border-red-500/50 hover:text-red-500 hover:bg-red-50 bg-transparent') : (isDark ? 'bg-white text-black border-white hover:bg-gray-200' : 'bg-gray-900 text-white border-gray-900 hover:bg-gray-800')}`}>{isFollowing ? 'フォロー中' : 'フォロー'}</button>}
+              <div className="flex flex-shrink-0 items-center gap-1">
+                {!isOwnPost && <button onClick={(e) => toggleFollow(p.authorId, e)} className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-bold border transition-colors whitespace-nowrap flex-shrink-0 ${isFollowing ? (isDark ? 'border-gray-600 text-white hover:border-red-500/50 hover:text-red-400 hover:bg-red-900/30 bg-transparent' : 'border-gray-300 text-gray-700 hover:border-red-500/50 hover:text-red-500 hover:bg-red-50 bg-transparent') : (isDark ? 'bg-white text-black border-white hover:bg-gray-200' : 'bg-gray-900 text-white border-gray-900 hover:bg-gray-800')}`}>{isFollowing ? 'フォロー中' : 'フォロー'}</button>}
                 {isAdmin && <button onClick={e => toggleGlobalPin(p, e)} className={`p-1.5 rounded-full ${isDark ? 'hover:bg-yellow-900/30 text-gray-500 hover:text-yellow-500' : 'hover:bg-yellow-100 text-gray-400 hover:text-yellow-500'} transition-colors ${p.isGlobalPinned ? 'text-yellow-500' : ''}`} title="公式ピン留め"><Pin size={16} className={p.isGlobalPinned ? 'fill-current' : ''} /></button>}
-                {(p.authorId === currentAccountId || isAdmin) && <button onClick={e => handleDelete(p, e)} className={`p-1.5 rounded-full ${isDark ? 'hover:bg-red-900/30 text-gray-500 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'} transition-colors`}><Trash2 size={16} /></button>}
+                {(isOwnPost || isAdmin) && <button onClick={e => handleDelete(p, e)} className={`p-1.5 rounded-full ${isDark ? 'hover:bg-red-900/30 text-gray-500 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'} transition-colors`}><Trash2 size={16} /></button>}
               </div>
             </div>
             {p.replyTo && p.replyToAuthor && (
@@ -665,6 +706,12 @@ export const PostItem = React.memo(function PostItem({
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {postDateTime && (
+              <div className={`mt-3 text-xs font-medium ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                {postDateTime}
               </div>
             )}
 
@@ -858,6 +905,7 @@ export const PostItem = React.memo(function PostItem({
                         currentRoomId={currentRoomId}
                         currentAccountId={currentAccountId}
                         currentUserProfile={currentUserProfile}
+                        accountIdAliases={accountIdAliases}
                         isAdmin={isAdmin}
                         following={following}
                         userBookmarks={userBookmarks}
@@ -966,6 +1014,7 @@ export const PostItem = React.memo(function PostItem({
 
 export default function CommunityComponent({
   firestore, currentRoomId, currentAccountId, currentUserProfile,
+  accountIdAliases = [],
   isAdmin, following, followers, userBookmarks, expandedPostId, setExpandedPostId,
   toggleFollow, openUserProfile, formatTimeAgo, sanitizeRoomId,
   VERIFIED_USERS, VETERAN_USERS, NAMING_USERS, setBadgeModal, openFollowList,
@@ -1027,7 +1076,7 @@ export default function CommunityComponent({
         </div>
       </div>
 
-      {activeTab === 'プロフィール' && viewingProfileId !== currentAccountId && (
+      {activeTab === 'プロフィール' && !isCurrentAccountId(viewingProfileId, accountIdAliases.length ? accountIdAliases : [currentAccountId]) && (
         (!viewingUserProfile || viewingUserProfile.id !== viewingProfileId) ? (
           <div className="flex flex-col items-center justify-center py-24">
             <Loader2 className="animate-spin text-blue-500" size={32} />
@@ -1053,8 +1102,8 @@ export default function CommunityComponent({
                 </div>
                 <p className={`text-[15px] leading-normal whitespace-pre-wrap mb-3 ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{viewingUserProfile.bio}</p>
                 <div className={`flex space-x-4 text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
-                  <div className={`cursor-pointer hover:underline ${isDark ? 'text-gray-400' : 'text-gray-500'}`} onClick={() => openFollowList('フォロー中', viewingFollowing)}><span className={`font-bold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{Object.keys(viewingFollowing).length}</span>フォロー中</div>
-                  <div className={`cursor-pointer hover:underline ${isDark ? 'text-gray-400' : 'text-gray-500'}`} onClick={() => openFollowList('フォロワー', viewingFollowers)}><span className={`font-bold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{Object.keys(viewingFollowers).length}</span>フォロワー</div>
+                  <div className={`cursor-pointer hover:underline ${isDark ? 'text-gray-400' : 'text-gray-500'}`} onClick={() => openFollowList('フォロー中', viewingFollowing)}><span className={`font-bold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{countAccountIdMap(viewingFollowing)}</span>フォロー中</div>
+                  <div className={`cursor-pointer hover:underline ${isDark ? 'text-gray-400' : 'text-gray-500'}`} onClick={() => openFollowList('フォロワー', viewingFollowers)}><span className={`font-bold mr-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>{countAccountIdMap(viewingFollowers)}</span>フォロワー</div>
                 </div>
               </div>
             </div>
@@ -1062,7 +1111,7 @@ export default function CommunityComponent({
               {(() => {
                 const userPosts = profilePosts;
                 if (userPosts.length === 0) return <div className={`p-10 text-center font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>ポストがありません</div>;
-                return userPosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={VERIFIED_USERS} VETERAN_USERS={VETERAN_USERS} NAMING_USERS={NAMING_USERS} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={allPosts} onSwitchRoom={onSwitchRoom} availableRooms={availableRooms} onNavigateToPost={(id) => {
+                return userPosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} accountIdAliases={accountIdAliases} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={VERIFIED_USERS} VETERAN_USERS={VETERAN_USERS} NAMING_USERS={NAMING_USERS} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={allPosts} onSwitchRoom={onSwitchRoom} availableRooms={availableRooms} onNavigateToPost={(id) => {
                   setExpandedPostId(id);
                   setTimeout(() => {
                     const el = document.getElementById(`post-${id}`);
@@ -1125,7 +1174,7 @@ export default function CommunityComponent({
       {activeTab !== 'プロフィール' && (
       <div>
         {visiblePosts.length === 0 && !isLoading && <div className={`p-10 text-center font-semibold ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>表示できるポストがありません</div>}
-        {visiblePosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={VERIFIED_USERS} VETERAN_USERS={VETERAN_USERS} NAMING_USERS={NAMING_USERS} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={allPosts} onSwitchRoom={onSwitchRoom} availableRooms={availableRooms} onNavigateToPost={(id) => {
+        {visiblePosts.map(p => <PostItem key={p._displayKey || p.id} p={p} firestore={firestore} currentRoomId={currentRoomId} currentAccountId={currentAccountId} currentUserProfile={currentUserProfile} accountIdAliases={accountIdAliases} isAdmin={isAdmin} following={following} userBookmarks={userBookmarks} expandedPostId={expandedPostId} setExpandedPostId={setExpandedPostId} toggleFollow={toggleFollow} openUserProfile={openUserProfile} formatTimeAgo={formatTimeAgo} sanitizeRoomId={sanitizeRoomId} VERIFIED_USERS={VERIFIED_USERS} VETERAN_USERS={VETERAN_USERS} NAMING_USERS={NAMING_USERS} setBadgeModal={setBadgeModal} Avatar={Avatar} isDark={isDark} allPosts={allPosts} onSwitchRoom={onSwitchRoom} availableRooms={availableRooms} onNavigateToPost={(id) => {
           setExpandedPostId(id);
           setTimeout(() => {
             const el = document.getElementById(`post-${id}`);

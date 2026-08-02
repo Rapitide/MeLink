@@ -73,8 +73,8 @@ export default function MinamiyonoBusGuide({ now, isDark }) {
   const cardBg = isDark ? 'bg-gray-950 border-gray-800' : 'bg-white border-gray-200';
 
   return (
-    <section className={`mt-4 rounded-2xl border p-4 sm:p-5 shadow-sm ${cardBg}`} aria-label="埼玉大学方面のバス時刻表">
-      <h3 className={`border-b pb-2 text-center text-sm font-black ${isDark ? 'border-gray-800 text-gray-100' : 'border-gray-200 text-gray-800'}`}>埼玉大学方面バス 次発案内</h3>
+    <section className={`mt-4 rounded-2xl border p-4 sm:p-5 shadow-sm ${cardBg}`} aria-label="埼玉大学行のバス時刻表">
+      <h3 className={`border-b pb-2 text-center text-sm font-black ${isDark ? 'border-gray-800 text-gray-100' : 'border-gray-200 text-gray-800'}`}>埼大行バス 次発案内</h3>
       <div className="py-3 text-center">
         <p className={`text-[10px] font-bold ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>現在時刻</p>
         <time className={`block text-4xl font-black leading-none tracking-tight tabular-nums ${isDark ? 'text-white' : 'text-gray-950'}`}>{String(now.getHours()).padStart(2, '0')}:{String(now.getMinutes()).padStart(2, '0')}</time>

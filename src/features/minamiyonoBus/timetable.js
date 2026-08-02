@@ -51,7 +51,7 @@ export const CAMPUS_BOUND_STOPS = [
   {
     id: 'kitaurawaWest',
     title: '北浦和 西口',
-    detail: '北浦03 / 5・7番',
+    detail: '北浦03 / 5番(国際興業)・7番(西武バス)',
     color: 'orange',
     revision: '2024年12月1日改正',
     platformByOperator: { 国: '5番', 西: '7番' },

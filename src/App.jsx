@@ -8,6 +8,16 @@ import WikiPage from './WikiPage';
 import MelinkProductDetail from './MelinkProductDetail';
 import TermsPage from './TermsPage';
 import PrivacyPage from './PrivacyPage';
+import AppleAuthDebugPage from './pages/AppleAuthDebugPage';
+import LegacyMigrationDebugPage from './pages/LegacyMigrationDebugPage';
+import {
+    APPLE_AUTH_DEBUG_PATH,
+    canUseAppleAuthDebugPage
+} from './pages/appleAuthDebugPageModel';
+import {
+    canUseLegacyMigrationDebugPage,
+    LEGACY_MIGRATION_DEBUG_PATH
+} from './pages/legacyMigrationDebugPageModel';
 
 export default function App() {
     return (
@@ -33,6 +43,20 @@ export default function App() {
 
                 {/* プライバシーポリシー（ melink.info/privacy ） */}
                 <Route path="/privacy" element={<PrivacyPage />} />
+
+                {canUseAppleAuthDebugPage && (
+                    <Route
+                        path={APPLE_AUTH_DEBUG_PATH}
+                        element={<AppleAuthDebugPage />}
+                    />
+                )}
+
+                {canUseLegacyMigrationDebugPage && (
+                    <Route
+                        path={LEGACY_MIGRATION_DEBUG_PATH}
+                        element={<LegacyMigrationDebugPage />}
+                    />
+                )}
             </Routes>
         </BrowserRouter>
     );
